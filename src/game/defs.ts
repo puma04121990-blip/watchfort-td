@@ -453,6 +453,75 @@ const WAVES_MAP05: WaveSpawn[][] = [
   ],
 ];
 
+
+/** West spawn → east run → south snake → SE gate (not map01–05). */
+const PATH_MAP06: Cell[] = [
+  { c: 0, r: 2 },
+  { c: 1, r: 2 },
+  { c: 2, r: 2 },
+  { c: 3, r: 2 },
+  { c: 4, r: 2 },
+  { c: 5, r: 2 },
+  { c: 6, r: 2 },
+  { c: 7, r: 2 },
+  { c: 8, r: 2 },
+  { c: 9, r: 2 },
+  { c: 10, r: 2 },
+  { c: 11, r: 2 },
+  { c: 11, r: 3 },
+  { c: 11, r: 4 },
+  { c: 11, r: 5 },
+  { c: 11, r: 6 },
+  { c: 11, r: 7 },
+  { c: 10, r: 7 },
+  { c: 9, r: 7 },
+  { c: 8, r: 7 },
+  { c: 7, r: 7 },
+  { c: 6, r: 7 },
+  { c: 5, r: 7 },
+  { c: 4, r: 7 },
+  { c: 3, r: 7 },
+  { c: 2, r: 7 },
+  { c: 1, r: 7 },
+  { c: 0, r: 7 },
+  { c: 0, r: 8 },
+  { c: 0, r: 9 },
+  { c: 1, r: 9 },
+  { c: 2, r: 9 },
+  { c: 3, r: 9 },
+  { c: 4, r: 9 },
+  { c: 5, r: 9 },
+  { c: 6, r: 9 },
+  { c: 7, r: 9 },
+  { c: 8, r: 9 },
+  { c: 9, r: 9 },
+  { c: 10, r: 9 },
+  { c: 11, r: 9 },
+];
+
+/** Ring-pressure: shamans mid-late, dense finale. */
+const WAVES_MAP06: WaveSpawn[][] = [
+  [
+    { kind: 'runner', count: 14, interval: 480, delay: 200 },
+    { kind: 'swarm', count: 18, interval: 190, delay: 250 },
+    { kind: 'tank', count: 6, interval: 1000, delay: 1500 },
+  ],
+  [
+    { kind: 'runner', count: 14, interval: 420, delay: 150 },
+    { kind: 'swarm', count: 22, interval: 160, delay: 200 },
+    { kind: 'shaman', count: 4, interval: 1300, delay: 700 },
+    { kind: 'tank', count: 9, interval: 800, delay: 900 },
+    { kind: 'brute', count: 2, interval: 1600, delay: 3500 },
+  ],
+  [
+    { kind: 'swarm', count: 30, interval: 120, delay: 80 },
+    { kind: 'runner', count: 16, interval: 340, delay: 150 },
+    { kind: 'shaman', count: 5, interval: 1100, delay: 500 },
+    { kind: 'tank', count: 12, interval: 680, delay: 700 },
+    { kind: 'brute', count: 6, interval: 1200, delay: 2200 },
+  ],
+];
+
 export const MAPS: Record<string, MapDef> = {
   map01: {
     id: 'map01',
@@ -484,9 +553,15 @@ export const MAPS: Record<string, MapDef> = {
     gate: PATH_MAP05[PATH_MAP05.length - 1] ?? { c: 11, r: 9 },
     waves: WAVES_MAP05,
   },
+  map06: {
+    id: 'map06',
+    path: PATH_MAP06,
+    gate: PATH_MAP06[PATH_MAP06.length - 1] ?? { c: 11, r: 9 },
+    waves: WAVES_MAP06,
+  },
 };
 
-export const MAP_LIST: MapDef[] = [MAPS.map01, MAPS.map02, MAPS.map03, MAPS.map04, MAPS.map05];
+export const MAP_LIST: MapDef[] = [MAPS.map01, MAPS.map02, MAPS.map03, MAPS.map04, MAPS.map05, MAPS.map06];
 
 export function getMap(id: string): MapDef {
   return MAPS[id] ?? MAPS.map01;

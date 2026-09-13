@@ -1,4 +1,4 @@
-export type MapId = 'map01' | 'map02' | 'map03' | 'map04' | 'map05';
+export type MapId = 'map01' | 'map02' | 'map03' | 'map04' | 'map05' | 'map06';
 
 export type Difficulty = 'normal' | 'hard';
 
@@ -18,6 +18,8 @@ export interface GameStateSnapshot {
   map04Stars: number;
   /** Best star rating for map05 (0–3). */
   map05Stars: number;
+  /** Best star rating for map06 (0–3). */
+  map06Stars: number;
   /** Persistent meta currency for menu upgrades. */
   metaGold: number;
   /** 0–3: +20 starting run coins per level. */
@@ -61,6 +63,7 @@ const DEFAULT: GameStateSnapshot = {
   map03Stars: 0,
   map04Stars: 0,
   map05Stars: 0,
+  map06Stars: 0,
   metaGold: 0,
   startGoldLevel: 0,
   arrowDmgLevel: 0,
@@ -89,6 +92,7 @@ class GameStateImpl {
   map03Stars = DEFAULT.map03Stars;
   map04Stars = DEFAULT.map04Stars;
   map05Stars = DEFAULT.map05Stars;
+  map06Stars = DEFAULT.map06Stars;
   metaGold = DEFAULT.metaGold;
   startGoldLevel = DEFAULT.startGoldLevel;
   arrowDmgLevel = DEFAULT.arrowDmgLevel;
@@ -120,6 +124,7 @@ class GameStateImpl {
     this.map03Stars = snapshot.map03Stars;
     this.map04Stars = snapshot.map04Stars;
     this.map05Stars = snapshot.map05Stars;
+    this.map06Stars = snapshot.map06Stars;
     this.metaGold = snapshot.metaGold;
     this.startGoldLevel = clampUpgrade(snapshot.startGoldLevel);
     this.arrowDmgLevel = clampUpgrade(snapshot.arrowDmgLevel);
@@ -144,6 +149,7 @@ class GameStateImpl {
       map03Stars: this.map03Stars,
       map04Stars: this.map04Stars,
       map05Stars: this.map05Stars,
+      map06Stars: this.map06Stars,
       metaGold: this.metaGold,
       startGoldLevel: this.startGoldLevel,
       arrowDmgLevel: this.arrowDmgLevel,
@@ -173,6 +179,7 @@ class GameStateImpl {
   }
 
   bestStars(mapId: string): number {
+    if (mapId === 'map06') return this.map06Stars;
     if (mapId === 'map05') return this.map05Stars;
     if (mapId === 'map04') return this.map04Stars;
     if (mapId === 'map03') return this.map03Stars;
@@ -183,6 +190,11 @@ class GameStateImpl {
   /** Record best stars for a map; returns true if a new best was saved. */
   recordMapStars(mapId: string, stars: number): boolean {
     const clamped = Math.max(0, Math.min(3, Math.floor(stars)));
+    if (mapId === 'map06') {
+      if (clamped <= this.map06Stars) return false;
+      this.map06Stars = clamped;
+      return true;
+    }
     if (mapId === 'map05') {
       if (clamped <= this.map05Stars) return false;
       this.map05Stars = clamped;
@@ -214,6 +226,7 @@ class GameStateImpl {
     if (mapId === 'map03') return this.map02Stars >= 1;
     if (mapId === 'map04') return this.map03Stars >= 1;
     if (mapId === 'map05') return this.map04Stars >= 1;
+    if (mapId === 'map06') return this.map05Stars >= 1;
     return false;
   }
 
