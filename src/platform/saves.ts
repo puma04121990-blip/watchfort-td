@@ -31,6 +31,7 @@ export async function loadGameState(): Promise<GameStateSnapshot | null> {
     musicOn: s.musicOn !== false,
     sfxOn: s.sfxOn !== false,
     tutorialDone: s.tutorialDone === true,
+    difficulty: s.difficulty === 'hard' ? 'hard' : 'normal',
   };
 }
 

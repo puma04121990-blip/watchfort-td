@@ -18,6 +18,9 @@ export class MenuScene extends Phaser.Scene {
     if (!GameState.isMapUnlocked(GameState.selectedMapId)) {
       GameState.selectedMapId = 'map01';
     }
+    if (GameState.difficulty === 'hard' && !GameState.isHardUnlocked()) {
+      GameState.difficulty = 'normal';
+    }
 
     this.add.rectangle(width / 2, height / 2, width, height, COLOR.panel);
     this.add
@@ -131,6 +134,8 @@ export class MenuScene extends Phaser.Scene {
       }
     }
 
+    this.buildDifficulty(width, height);
+
     this.buildShop(width, height);
 
     this.buildAudioToggles(width, height);
@@ -181,8 +186,56 @@ export class MenuScene extends Phaser.Scene {
     });
   }
 
+
+  private buildDifficulty(width: number, height: number): void {
+    const y = height * 0.435;
+    const hardUnlocked = GameState.isHardUnlocked();
+    const isHard = GameState.difficulty === 'hard';
+    let label: string;
+    let color: string;
+    if (isHard && hardUnlocked) {
+      label = t('menu.diffHard');
+      color = '#F87171';
+    } else if (!hardUnlocked && isHard) {
+      label = t('menu.diffLocked');
+      color = '#9CA3AF';
+    } else if (!hardUnlocked) {
+      // Show normal + locked hint for hard
+      label = `${t('menu.diffNormal')} · ${t('menu.diffLocked')}`;
+      color = '#E8B84A';
+    } else {
+      label = t('menu.diffNormal');
+      color = '#E8B84A';
+    }
+
+    const btn = this.add
+      .text(width / 2, y, label, {
+        fontFamily: 'system-ui, sans-serif',
+        fontSize: '15px',
+        color,
+        fontStyle: 'bold',
+      })
+      .setOrigin(0.5)
+      .setInteractive({ useHandCursor: true });
+
+    btn.on('pointerdown', () => {
+      if (GameState.difficulty === 'normal') {
+        if (!GameState.isHardUnlocked()) {
+          AudioBus.playUi('error');
+          return;
+        }
+        GameState.difficulty = 'hard';
+      } else {
+        GameState.difficulty = 'normal';
+      }
+      AudioBus.playUi('click');
+      void saveGameState(GameState.snapshot());
+      this.scene.restart();
+    });
+  }
+
   private buildShop(width: number, height: number): void {
-    const shopY0 = height * 0.46;
+    const shopY0 = height * 0.48;
     const rowH = 32;
     const rows: Array<{
       labelKey: string;

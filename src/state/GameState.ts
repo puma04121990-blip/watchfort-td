@@ -1,5 +1,7 @@
 export type MapId = 'map01' | 'map02' | 'map03';
 
+export type Difficulty = 'normal' | 'hard';
+
 export interface GameStateSnapshot {
   coins: number;
   gateHp: number;
@@ -28,6 +30,8 @@ export interface GameStateSnapshot {
   sfxOn: boolean;
   /** First-run play tutorial completed. */
   tutorialDone: boolean;
+  /** Run difficulty (persisted). */
+  difficulty: Difficulty;
 }
 
 const RUN_COINS = 120;
@@ -56,6 +60,7 @@ const DEFAULT: GameStateSnapshot = {
   musicOn: true,
   sfxOn: true,
   tutorialDone: false,
+  difficulty: 'normal',
 };
 
 function clampUpgrade(level: number): number {
@@ -80,6 +85,7 @@ class GameStateImpl {
   musicOn = DEFAULT.musicOn;
   sfxOn = DEFAULT.sfxOn;
   tutorialDone = DEFAULT.tutorialDone;
+  difficulty: Difficulty = DEFAULT.difficulty;
   /** Currently selected map for the next / active run (not persisted). */
   selectedMapId: MapId = 'map01';
 
@@ -106,6 +112,7 @@ class GameStateImpl {
     this.musicOn = snapshot.musicOn !== false;
     this.sfxOn = snapshot.sfxOn !== false;
     this.tutorialDone = snapshot.tutorialDone === true;
+    this.difficulty = snapshot.difficulty === 'hard' ? 'hard' : 'normal';
   }
 
   snapshot(): GameStateSnapshot {
@@ -126,6 +133,7 @@ class GameStateImpl {
       musicOn: this.musicOn,
       sfxOn: this.sfxOn,
       tutorialDone: this.tutorialDone,
+      difficulty: this.difficulty,
     };
   }
 
@@ -180,10 +188,30 @@ class GameStateImpl {
     return this.map01Stars >= 1;
   }
 
+  /** Hard difficulty unlocks with the same gate as barracks. */
+  isHardUnlocked(): boolean {
+    return this.map01Stars >= 1;
+  }
+
+  /** Enemy HP multiplier for the selected difficulty. */
+  enemyHpMult(): number {
+    return this.difficulty === 'hard' ? 1.4 : 1.0;
+  }
+
+  /** Enemy speed multiplier for the selected difficulty. */
+  enemySpeedMult(): number {
+    return this.difficulty === 'hard' ? 1.08 : 1.0;
+  }
+
+  /** Win meta-gold multiplier for the selected difficulty. */
+  winMetaMult(): number {
+    return this.difficulty === 'hard' ? 1.35 : 1.0;
+  }
+
   /** Meta reward for a win: 15 + gateHp*2 + stars*5. Returns amount granted. */
   grantWinMeta(stars: number): number {
     const s = Math.max(0, Math.min(3, Math.floor(stars)));
-    const amount = 15 + this.gateHp * 2 + s * 5;
+    const amount = Math.round((15 + this.gateHp * 2 + s * 5) * this.winMetaMult());
     this.metaGold += amount;
     return amount;
   }

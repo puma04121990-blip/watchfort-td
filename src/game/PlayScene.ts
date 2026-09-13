@@ -890,15 +890,17 @@ export class PlayScene extends Phaser.Scene {
     sprite.setDisplaySize(sz, sz);
     const hpBg = this.add.rectangle(start.x, start.y - 22, 28, 4, COLOR.shade).setDepth(11);
     const hpFg = this.add.rectangle(start.x, start.y - 22, 28, 4, COLOR.gold).setDepth(12);
+    const hp = Math.max(1, Math.round(def.hp * GameState.enemyHpMult()));
+    const speed = def.speed * GameState.enemySpeedMult();
     this.enemies.push({
       id: this.nextId++,
       kind,
       sprite,
       hpBg,
       hpFg,
-      hp: def.hp,
-      maxHp: def.hp,
-      speed: def.speed,
+      hp,
+      maxHp: hp,
+      speed,
       gold: def.gold,
       wp: 0,
       x: start.x,
