@@ -170,6 +170,9 @@ export class PlayScene extends Phaser.Scene {
   private hoverRow = -1;
   private endOverlay: Phaser.GameObjects.Container | null = null;
   private pauseOverlay: Phaser.GameObjects.Container | null = null;
+  private speedMul = 1;
+  private speedLabel!: Phaser.GameObjects.Text;
+  private nextWaveText!: Phaser.GameObjects.Text;
   private towerPanel: Phaser.GameObjects.Container | null = null;
   private selectedTower: TowerActor | null = null;
   private navigating = false;
@@ -207,6 +210,8 @@ export class PlayScene extends Phaser.Scene {
     this.lastWinStars = 0;
     this.lastWinMeta = 0;
     this.metaDoubled = false;
+    this.speedMul = 1;
+    this.time.timeScale = 1;
     this.time.paused = false;
 
     this.mapDef = getMap(GameState.selectedMapId);
@@ -220,6 +225,7 @@ export class PlayScene extends Phaser.Scene {
     this.rangeGfx = this.add.graphics().setDepth(3);
     this.buildHud();
     this.buildPauseButton();
+    this.buildSpeedButton();
 
     this.input.on('pointermove', (p: Phaser.Input.Pointer) => {
       if (this.ended || this.paused || p.y >= ROWS * TILE) {
@@ -245,11 +251,13 @@ export class PlayScene extends Phaser.Scene {
   update(_time: number, delta: number): void {
     if (this.ended || this.paused) return;
     const now = this.time.now;
+    // Scene delta is not scaled by Clock.timeScale; multiply for movement/shots.
+    const dt = delta * this.speedMul;
     this.spawnDue(now);
-    this.stepEnemies(delta, now);
+    this.stepEnemies(dt, now);
     this.stepSoldiers(now);
     this.stepTowers(now);
-    this.stepShots(delta);
+    this.stepShots(dt);
     this.refreshHud();
     this.checkWaveEnd();
   }
@@ -310,6 +318,15 @@ export class PlayScene extends Phaser.Scene {
         color: '#F3F4F6',
       })
       .setAlpha(0.75)
+      .setDepth(110);
+
+    this.nextWaveText = this.add
+      .text(16, 54, '', {
+        fontFamily: 'system-ui, sans-serif',
+        fontSize: '12px',
+        color: '#E8B84A',
+      })
+      .setAlpha(0.9)
       .setDepth(110);
 
     HUD_KINDS.forEach((kind, i) => {
@@ -402,6 +419,36 @@ export class PlayScene extends Phaser.Scene {
     });
   }
 
+  private buildSpeedButton(): void {
+    const x = GAME_W - 76;
+    const y = 28;
+    const bg = this.add
+      .rectangle(0, 0, 44, 36, COLOR.panel, 0.92)
+      .setStrokeStyle(2, COLOR.gold)
+      .setInteractive({ useHandCursor: true });
+    this.speedLabel = this.add
+      .text(0, 0, t('play.speed1'), {
+        fontFamily: 'system-ui, sans-serif',
+        fontSize: '14px',
+        color: '#F3F4F6',
+        fontStyle: 'bold',
+      })
+      .setOrigin(0.5);
+    this.add.container(x, y, [bg, this.speedLabel]).setDepth(120);
+    bg.on('pointerdown', (pointer: Phaser.Input.Pointer) => {
+      pointer.event?.stopPropagation?.();
+      this.toggleSpeed();
+    });
+  }
+
+  private toggleSpeed(): void {
+    if (this.ended || this.paused) return;
+    this.speedMul = this.speedMul >= 2 ? 1 : 2;
+    this.time.timeScale = this.speedMul;
+    this.speedLabel.setText(this.speedMul >= 2 ? t('play.speed2') : t('play.speed1'));
+    AudioBus.playUi('click');
+  }
+
   private refreshSelect(): void {
     this.selectMarks.forEach((mark, i) => {
       const kind = HUD_KINDS[i];
@@ -428,6 +475,28 @@ export class PlayScene extends Phaser.Scene {
     this.startBg.setFillStyle(canStart ? COLOR.towerBlue : COLOR.shade);
     this.startBg.setAlpha(canStart ? 1 : 0.55);
     this.startLabel.setText(canStart ? t('play.startWave') : t('play.waiting'));
+    this.refreshNextWavePreview();
+    if (this.speedLabel) {
+      this.speedLabel.setText(this.speedMul >= 2 ? t('play.speed2') : t('play.speed1'));
+    }
+  }
+
+  private refreshNextWavePreview(): void {
+    if (!this.nextWaveText) return;
+    if (this.waveLive || this.ended || GameState.wave >= this.totalWaves) {
+      this.nextWaveText.setText('');
+      this.nextWaveText.setVisible(false);
+      return;
+    }
+    const plan = this.mapDef.waves[GameState.wave];
+    if (!plan || plan.length === 0) {
+      this.nextWaveText.setText('');
+      this.nextWaveText.setVisible(false);
+      return;
+    }
+    const parts = plan.map((g) => `${t(`enemy.${g.kind}`)}×${g.count}`);
+    this.nextWaveText.setText(t('play.nextWave', { list: parts.join(', ') }));
+    this.nextWaveText.setVisible(true);
   }
 
   private redrawRange(): void {
