@@ -30,6 +30,7 @@ export async function loadGameState(): Promise<GameStateSnapshot | null> {
     frostDmgLevel: num(s.frostDmgLevel, 0),
     musicOn: s.musicOn !== false,
     sfxOn: s.sfxOn !== false,
+    tutorialDone: s.tutorialDone === true,
   };
 }
 

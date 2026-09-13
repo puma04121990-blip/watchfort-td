@@ -119,6 +119,7 @@ const TOWER_COLORS: Record<TowerKind, number> = {
 
 const SOLDIER_MELEE_MS = 400;
 const SOLDIER_BLOCK_R = 30;
+const BUILD_SECONDS = 15;
 
 function enemyMeleeDamage(kind: EnemyKind): number {
   switch (kind) {
@@ -181,6 +182,11 @@ export class PlayScene extends Phaser.Scene {
   private metaDoubled = false;
   private mapDef!: MapDef;
   private totalWaves = 3;
+  /** Scene-time deadline for auto-start; 0 = inactive. */
+  private buildDeadline = 0;
+  private tutorialOpen = false;
+  private tutorialStep = 0;
+  private tutorialOverlay: Phaser.GameObjects.Container | null = null;
 
   constructor() {
     super({ key: 'PlayScene' });
@@ -213,6 +219,10 @@ export class PlayScene extends Phaser.Scene {
     this.speedMul = 1;
     this.time.timeScale = 1;
     this.time.paused = false;
+    this.buildDeadline = 0;
+    this.tutorialOpen = false;
+    this.tutorialStep = 0;
+    this.tutorialOverlay = null;
 
     this.mapDef = getMap(GameState.selectedMapId);
     this.totalWaves = this.mapDef.waves.length;
@@ -228,7 +238,7 @@ export class PlayScene extends Phaser.Scene {
     this.buildSpeedButton();
 
     this.input.on('pointermove', (p: Phaser.Input.Pointer) => {
-      if (this.ended || this.paused || p.y >= ROWS * TILE) {
+      if (this.ended || this.paused || this.tutorialOpen || p.y >= ROWS * TILE) {
         this.hoverCol = -1;
         this.hoverRow = -1;
         this.redrawRange();
@@ -240,19 +250,22 @@ export class PlayScene extends Phaser.Scene {
     });
 
     this.input.on('pointerdown', (p: Phaser.Input.Pointer) => {
-      if (this.ended || this.paused) return;
+      if (this.ended || this.paused || this.tutorialOpen) return;
       if (p.y >= ROWS * TILE) return;
       const c = Math.floor(p.x / TILE);
       const r = Math.floor(p.y / TILE);
       this.onFieldTap(c, r);
     });
+
+    this.maybeShowTutorial();
   }
 
   update(_time: number, delta: number): void {
-    if (this.ended || this.paused) return;
+    if (this.ended || this.paused || this.tutorialOpen) return;
     const now = this.time.now;
     // Scene delta is not scaled by Clock.timeScale; multiply for movement/shots.
     const dt = delta * this.speedMul;
+    this.tickBuildTimer();
     this.spawnDue(now);
     this.stepEnemies(dt, now);
     this.stepSoldiers(now);
@@ -363,7 +376,7 @@ export class PlayScene extends Phaser.Scene {
         .setOrigin(0.5)
         .setDepth(103);
       mark.on('pointerdown', () => {
-        if (this.paused) return;
+        if (this.paused || this.tutorialOpen) return;
         if (kind === 'barracks' && !GameState.isBarracksUnlocked()) {
           AudioBus.playUi('error');
           return;
@@ -389,7 +402,7 @@ export class PlayScene extends Phaser.Scene {
       .setOrigin(0.5)
       .setDepth(103);
     this.startBg.on('pointerdown', () => {
-      if (this.paused) return;
+      if (this.paused || this.tutorialOpen) return;
       this.tryStartWave();
     });
 
@@ -471,10 +484,18 @@ export class PlayScene extends Phaser.Scene {
     const shown = Math.min(Math.max(GameState.wave, 0), this.totalWaves);
     const phase = this.waveLive ? `${shown}/${this.totalWaves}` : `${shown}/${this.totalWaves} · ${t('play.waiting')}`;
     this.waveText.setText(`${t('play.wave')}: ${phase}`);
-    const canStart = !this.ended && !this.waveLive && !this.paused && GameState.wave < this.totalWaves;
+    const canStart =
+      !this.ended && !this.waveLive && !this.paused && !this.tutorialOpen && GameState.wave < this.totalWaves;
     this.startBg.setFillStyle(canStart ? COLOR.towerBlue : COLOR.shade);
     this.startBg.setAlpha(canStart ? 1 : 0.55);
-    this.startLabel.setText(canStart ? t('play.startWave') : t('play.waiting'));
+    const secs = this.buildSecondsLeft();
+    if (canStart && secs !== null) {
+      this.startLabel.setText(t('play.autoStart', { n: secs }));
+    } else if (canStart) {
+      this.startLabel.setText(t('play.startWave'));
+    } else {
+      this.startLabel.setText(t('play.waiting'));
+    }
     this.refreshNextWavePreview();
     if (this.speedLabel) {
       this.speedLabel.setText(this.speedMul >= 2 ? t('play.speed2') : t('play.speed1'));
@@ -740,10 +761,17 @@ export class PlayScene extends Phaser.Scene {
   }
 
   private tryStartWave(): void {
-    if (this.ended || this.paused || this.waveLive || GameState.wave >= this.totalWaves) {
+    if (
+      this.ended ||
+      this.paused ||
+      this.tutorialOpen ||
+      this.waveLive ||
+      GameState.wave >= this.totalWaves
+    ) {
       AudioBus.playUi('error');
       return;
     }
+    this.cancelBuildTimer();
     this.clearTowerSelection();
     GameState.wave += 1;
     this.waveLive = true;
@@ -1091,6 +1119,8 @@ export class PlayScene extends Phaser.Scene {
     this.refreshHud();
     if (GameState.wave >= this.totalWaves && GameState.gateHp > 0) {
       this.win();
+    } else if (!this.ended) {
+      this.startBuildTimer();
     }
   }
 
@@ -1203,6 +1233,7 @@ export class PlayScene extends Phaser.Scene {
   private win(): void {
     if (this.ended) return;
     this.ended = true;
+    this.cancelBuildTimer();
     this.clearTowerSelection();
     this.lastWinStars = starsForGate(GameState.gateHp, GameState.maxGateHp);
     this.lastWinMeta = hookLevelComplete(this.lastWinStars);
@@ -1215,6 +1246,7 @@ export class PlayScene extends Phaser.Scene {
     this.ended = true;
     this.waveLive = false;
     this.pending = [];
+    this.cancelBuildTimer();
     this.clearTowerSelection();
     hookLevelFail();
     this.showBanner(t('play.fail'), false);
@@ -1410,6 +1442,9 @@ export class PlayScene extends Phaser.Scene {
     }
     this.refreshHud();
     this.redrawRange();
+    if (!this.waveLive && GameState.wave < this.totalWaves) {
+      this.startBuildTimer();
+    }
   }
 
   private clearEnemiesOnGateCell(): void {
@@ -1426,6 +1461,156 @@ export class PlayScene extends Phaser.Scene {
     }
     this.enemies = this.enemies.filter((e) => e.alive);
   }
+  private buildSecondsLeft(): number | null {
+    if (this.buildDeadline <= 0) return null;
+    return Math.max(0, Math.ceil((this.buildDeadline - this.time.now) / 1000));
+  }
+
+  private cancelBuildTimer(): void {
+    this.buildDeadline = 0;
+  }
+
+  /** Reset countdown when entering build phase (create / wave clear). */
+  private startBuildTimer(): void {
+    if (this.ended || this.waveLive || this.tutorialOpen || GameState.wave >= this.totalWaves) {
+      this.cancelBuildTimer();
+      return;
+    }
+    this.buildDeadline = this.time.now + BUILD_SECONDS * 1000;
+    this.refreshHud();
+  }
+
+  private tickBuildTimer(): void {
+    if (this.buildDeadline <= 0) return;
+    if (this.waveLive || this.ended || GameState.wave >= this.totalWaves) {
+      this.cancelBuildTimer();
+      return;
+    }
+    if (this.time.now >= this.buildDeadline) {
+      this.cancelBuildTimer();
+      this.tryStartWave();
+    }
+  }
+
+  private maybeShowTutorial(): void {
+    if (GameState.tutorialDone) {
+      this.startBuildTimer();
+      return;
+    }
+    this.tutorialOpen = true;
+    this.tutorialStep = 0;
+    this.cancelBuildTimer();
+    this.showTutorialOverlay();
+    this.refreshHud();
+  }
+
+  private hideTutorialOverlay(): void {
+    if (this.tutorialOverlay) {
+      this.tutorialOverlay.destroy(true);
+      this.tutorialOverlay = null;
+    }
+  }
+
+  private showTutorialOverlay(): void {
+    this.hideTutorialOverlay();
+    const keys = ['play.tut1', 'play.tut2', 'play.tut3'] as const;
+    const root = this.add.container(0, 0).setDepth(220);
+    this.tutorialOverlay = root;
+
+    const dim = this.add.rectangle(GAME_W / 2, GAME_H / 2, GAME_W, GAME_H, COLOR.panel, 0.72);
+    dim.setInteractive();
+    dim.on('pointerdown', () => {
+      this.advanceTutorial();
+    });
+    root.add(dim);
+
+    root.add(
+      this.add
+        .rectangle(GAME_W / 2, GAME_H / 2 - 10, 420, 200, COLOR.shade, 0.95)
+        .setStrokeStyle(2, COLOR.gold),
+    );
+
+    const body = this.add
+      .text(GAME_W / 2, GAME_H / 2 - 40, t(keys[this.tutorialStep] ?? 'play.tut1'), {
+        fontFamily: 'system-ui, sans-serif',
+        fontSize: '18px',
+        color: '#F3F4F6',
+        align: 'center',
+        wordWrap: { width: 380 },
+      })
+      .setOrigin(0.5);
+    root.add(body);
+
+    const stepLabel = this.add
+      .text(GAME_W / 2, GAME_H / 2 - 88, `${this.tutorialStep + 1}/3`, {
+        fontFamily: 'system-ui, sans-serif',
+        fontSize: '14px',
+        color: '#E8B84A',
+      })
+      .setOrigin(0.5);
+    root.add(stepLabel);
+
+    const nextBg = this.add
+      .rectangle(GAME_W / 2 - 90, GAME_H / 2 + 58, 150, 40, COLOR.towerBlue)
+      .setStrokeStyle(2, COLOR.gold)
+      .setInteractive({ useHandCursor: true });
+    const nextLabel = this.add
+      .text(GAME_W / 2 - 90, GAME_H / 2 + 58, t('play.tutNext'), {
+        fontFamily: 'system-ui, sans-serif',
+        fontSize: '16px',
+        color: '#F3F4F6',
+      })
+      .setOrigin(0.5);
+    nextBg.on('pointerdown', (pointer: Phaser.Input.Pointer) => {
+      pointer.event?.stopPropagation?.();
+      this.advanceTutorial();
+    });
+    root.add(nextBg);
+    root.add(nextLabel);
+
+    const skipBg = this.add
+      .rectangle(GAME_W / 2 + 90, GAME_H / 2 + 58, 150, 40, COLOR.shade)
+      .setStrokeStyle(2, 0x374151)
+      .setInteractive({ useHandCursor: true });
+    const skipLabel = this.add
+      .text(GAME_W / 2 + 90, GAME_H / 2 + 58, t('play.tutSkip'), {
+        fontFamily: 'system-ui, sans-serif',
+        fontSize: '16px',
+        color: '#F3F4F6',
+      })
+      .setOrigin(0.5);
+    skipBg.on('pointerdown', (pointer: Phaser.Input.Pointer) => {
+      pointer.event?.stopPropagation?.();
+      this.finishTutorial();
+    });
+    root.add(skipBg);
+    root.add(skipLabel);
+  }
+
+  private advanceTutorial(): void {
+    if (!this.tutorialOpen) return;
+    if (this.tutorialStep >= 2) {
+      this.finishTutorial();
+      return;
+    }
+    this.tutorialStep += 1;
+    AudioBus.playUi('click');
+    this.showTutorialOverlay();
+  }
+
+  private finishTutorial(): void {
+    if (!this.tutorialOpen && GameState.tutorialDone) return;
+    this.tutorialOpen = false;
+    this.hideTutorialOverlay();
+    GameState.tutorialDone = true;
+    void saveGameState(GameState.snapshot());
+    AudioBus.playUi('confirm');
+    this.startBuildTimer();
+    this.refreshHud();
+    this.redrawRange();
+  }
+
+
 }
 
 function starsForGate(gateHp: number, maxGateHp: number): number {

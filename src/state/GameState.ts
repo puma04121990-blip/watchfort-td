@@ -26,6 +26,8 @@ export interface GameStateSnapshot {
   musicOn: boolean;
   /** SFX + UI buses enabled (persisted). */
   sfxOn: boolean;
+  /** First-run play tutorial completed. */
+  tutorialDone: boolean;
 }
 
 const RUN_COINS = 120;
@@ -53,6 +55,7 @@ const DEFAULT: GameStateSnapshot = {
   frostDmgLevel: 0,
   musicOn: true,
   sfxOn: true,
+  tutorialDone: false,
 };
 
 function clampUpgrade(level: number): number {
@@ -76,6 +79,7 @@ class GameStateImpl {
   frostDmgLevel = DEFAULT.frostDmgLevel;
   musicOn = DEFAULT.musicOn;
   sfxOn = DEFAULT.sfxOn;
+  tutorialDone = DEFAULT.tutorialDone;
   /** Currently selected map for the next / active run (not persisted). */
   selectedMapId: MapId = 'map01';
 
@@ -101,6 +105,7 @@ class GameStateImpl {
     this.frostDmgLevel = clampUpgrade(snapshot.frostDmgLevel);
     this.musicOn = snapshot.musicOn !== false;
     this.sfxOn = snapshot.sfxOn !== false;
+    this.tutorialDone = snapshot.tutorialDone === true;
   }
 
   snapshot(): GameStateSnapshot {
@@ -120,6 +125,7 @@ class GameStateImpl {
       frostDmgLevel: this.frostDmgLevel,
       musicOn: this.musicOn,
       sfxOn: this.sfxOn,
+      tutorialDone: this.tutorialDone,
     };
   }
 
