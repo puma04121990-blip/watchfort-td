@@ -45,6 +45,9 @@ P = {
     "redD": (155, 40, 44, 255),
     "swarm": (232, 106, 60, 255),
     "swarmL": (255, 160, 110, 255),
+    "splitter": (123, 198, 126, 255),
+    "splitterL": (168, 230, 161, 255),
+    "splitterD": (61, 139, 90, 255),
     "gold": (232, 184, 74, 255),
     "goldL": (255, 230, 150, 255),
     "goldD": (180, 130, 40, 255),
@@ -489,6 +492,53 @@ def gen_enemy_brute():
     save("enemy_brute.png", img, 52, 52)
 
 
+
+def gen_enemy_splitter():
+    """Lime-mint pod carrier with two swarm dots inside."""
+    size = 48
+    img = new_canvas(size, size)
+    d = ImageDraw.Draw(img)
+    mid = size / 2
+    body, body_l, body_d = P["splitter"], P["splitterL"], P["splitterD"]
+    contact_blob(img, mid, size - 5, size * 0.3, size * 0.1, 55)
+    body_cy = mid + 2
+    brx = size * 0.30
+    bry = size * 0.34
+    soft_radial(img, mid, body_cy, brx, bry, body_l, body_d, power=0.85)
+    add_specular(img, mid - brx * 0.35, body_cy - bry * 0.4, brx * 0.4, bry * 0.35, 130)
+    add_rim(img, mid, body_cy, brx, bry, lighten(body, 0.35)[:3] + (80,), 1.2)
+    for sx, sy in ((mid - 6, body_cy + 2), (mid + 6, body_cy + 4)):
+        soft_radial(img, sx, sy, 4.2, 3.8, P["swarmL"][:3] + (200,), P["swarm"][:3] + (160,), power=0.8)
+        soft_radial(img, sx - 1, sy - 1, 1.5, 1.2, (255, 255, 255, 140), (255, 255, 255, 0))
+    hx, hy = mid, mid - size * 0.14
+    hrx, hry = size * 0.22, size * 0.2
+    soft_radial(img, hx, hy, hrx, hry, body_l, body_d, power=0.8)
+    add_specular(img, hx - hrx * 0.3, hy - hry * 0.35, hrx * 0.35, hry * 0.3, 150)
+    eye_y = hy - hry * 0.05
+    eye_dx = hrx * 0.38
+    erx, ery = hrx * 0.30, hry * 0.34
+    for ex in (hx - eye_dx, hx + eye_dx):
+        soft_radial(img, ex, eye_y, erx, ery, P["white"], (220, 220, 230, 255), power=0.9)
+        soft_radial(img, ex + erx * 0.1, eye_y + ery * 0.1, erx * 0.45, ery * 0.5, P["shade"], P["shade"])
+        fill_ellipse(d, ex - erx * 0.25, eye_y - ery * 0.25, erx * 0.2, ery * 0.2, P["white"])
+    cheek = mix(body_l, (255, 150, 140, 255), 0.45)
+    soft_radial(img, hx - hrx * 0.7, hy + hry * 0.25, hrx * 0.22, hry * 0.15, cheek[:3] + (120,), cheek[:3] + (0,))
+    soft_radial(img, hx + hrx * 0.7, hy + hry * 0.25, hrx * 0.22, hry * 0.15, cheek[:3] + (120,), cheek[:3] + (0,))
+    smile_y = hy + hry * 0.35
+    fill_ellipse(d, hx, smile_y, hrx * 0.25, hry * 0.12, body_d)
+    fill_ellipse(d, hx, smile_y - 0.4, hrx * 0.22, hry * 0.1, body_l)
+    leg_y0 = body_cy + bry * 0.55
+    leg_h = size * 0.14
+    soft_linear_v(img, mid - brx * 0.5, leg_y0, mid - brx * 0.25, leg_y0 + leg_h, body, body_d, radius=2)
+    soft_linear_v(img, mid + brx * 0.25, leg_y0, mid + brx * 0.5, leg_y0 + leg_h, body, body_d, radius=2)
+    soft_radial(img, mid - brx * 1.05, body_cy, size * 0.07, size * 0.09, body_l, body_d)
+    soft_radial(img, mid + brx * 1.05, body_cy, size * 0.07, size * 0.09, body_l, body_d)
+    save("enemy_splitter.png", img, size, size)
+    hand = ROOT / "assets" / "handcrafted"
+    hand.mkdir(parents=True, exist_ok=True)
+    shutil.copy2(OUT / "enemy_splitter.png", hand / "enemy_splitter.png")
+
+
 def gen_enemy_swarm():
     size = 32
     img = new_canvas(size, size)
@@ -610,6 +660,7 @@ def main():
     gen_enemy_tank()
     gen_enemy_brute()
     gen_enemy_swarm()
+    gen_enemy_splitter()
     gen_projectile_arrow()
     gen_projectile_cannon()
     gen_projectile_frost()

@@ -146,6 +146,8 @@ function enemyMeleeDamage(kind: EnemyKind): number {
       return 8;
     case 'shaman':
       return 7;
+    case 'splitter':
+      return 9;
     case 'tank':
       return 12;
     case 'brute':
@@ -175,6 +177,8 @@ function enemySpriteSize(kind: EnemyKind): number {
     case 'runner':
       return 36;
     case 'shaman':
+      return 40;
+    case 'splitter':
       return 40;
     case 'tank':
       return 42;
@@ -939,17 +943,23 @@ export class PlayScene extends Phaser.Scene {
   }
 
   private spawnEnemy(kind: EnemyKind): void {
-    const def = ENEMIES[kind];
     const start = this.waypoints[0];
     if (!start) return;
+    this.spawnEnemyAt(kind, 0, start.x, start.y);
+  }
+
+  /** Spawn at a path waypoint/progress so splitter children can appear mid-path. */
+  private spawnEnemyAt(kind: EnemyKind, wp: number, x: number, y: number): void {
+    const def = ENEMIES[kind];
     const sz = enemySpriteSize(kind);
-    const shadow = contactShadow(this, start.x, start.y + sz * 0.38, sz * 0.72, sz * 0.28, 6);
-    const sprite = this.add.image(start.x, start.y, def.texture).setDepth(8);
+    const shadow = contactShadow(this, x, y + sz * 0.38, sz * 0.72, sz * 0.28, 6);
+    const sprite = this.add.image(x, y, def.texture).setDepth(8);
     sprite.setDisplaySize(sz, sz);
-    const hpBg = this.add.rectangle(start.x, start.y - 22, 28, 4, COLOR.shade).setDepth(11);
-    const hpFg = this.add.rectangle(start.x, start.y - 22, 28, 4, COLOR.gold).setDepth(12);
+    const hpBg = this.add.rectangle(x, y - 22, 28, 4, COLOR.shade).setDepth(11);
+    const hpFg = this.add.rectangle(x, y - 22, 28, 4, COLOR.gold).setDepth(12);
     const hp = Math.max(1, Math.round(def.hp * GameState.enemyHpMult()));
     const speed = def.speed * GameState.enemySpeedMult();
+    const clampedWp = Math.max(0, Math.min(wp, Math.max(0, this.waypoints.length - 1)));
     this.enemies.push({
       id: this.nextId++,
       kind,
@@ -961,14 +971,31 @@ export class PlayScene extends Phaser.Scene {
       maxHp: hp,
       speed,
       gold: def.gold,
-      wp: 0,
-      x: start.x,
-      y: start.y,
+      wp: clampedWp,
+      x,
+      y,
       slowUntil: 0,
       slowFactor: 1,
       alive: true,
       nextHealAt: kind === 'shaman' ? 0 : 0,
     });
+  }
+
+  private spawnSplitterPop(x: number, y: number): void {
+    for (const ox of [-5, 5] as const) {
+      const dot = this.add.circle(x + ox, y, 5, COLOR.splitter, 0.9).setDepth(13);
+      this.tweens.add({
+        targets: dot,
+        y: y - 18,
+        alpha: 0,
+        scale: 1.6,
+        duration: 280,
+        ease: 'Cubic.Out',
+        onComplete: () => {
+          dot.destroy();
+        },
+      });
+    }
   }
 
   private stepEnemies(delta: number, now: number): void {
@@ -1391,6 +1418,10 @@ export class PlayScene extends Phaser.Scene {
       e.slowFactor = slowFactor;
     }
     if (e.hp <= 0) {
+      const split = e.kind === 'splitter';
+      const spawnWp = e.wp;
+      const spawnX = e.x;
+      const spawnY = e.y;
       e.alive = false;
       e.sprite.destroy();
       e.shadow.destroy();
@@ -1409,7 +1440,7 @@ export class PlayScene extends Phaser.Scene {
       this.goldEarned += gained;
       GameState.addCoins(gained);
       if (bonus > 0) {
-        this.spawnFloatBonus(e.x, e.y, bonus);
+        this.spawnFloatBonus(spawnX, spawnY, bonus);
       }
       this.showStreakLabel();
       if (e.kind === 'brute' && !this.ended) {
@@ -1417,6 +1448,11 @@ export class PlayScene extends Phaser.Scene {
       }
       AudioBus.playSfx('die');
       AudioBus.playSfx('coin');
+      if (split) {
+        this.spawnEnemyAt('swarm', spawnWp, spawnX - 6, spawnY);
+        this.spawnEnemyAt('swarm', spawnWp, spawnX + 6, spawnY);
+        this.spawnSplitterPop(spawnX, spawnY);
+      }
       this.refreshHud();
     }
   }

@@ -14,6 +14,7 @@ export const COLOR = {
   frost: 0x22d3ee,
   barracks: 0x3d9b6e,
   lightning: 0xa855f7,
+  splitter: 0x7bc67e,
   enemyRed: 0xd64545,
   gold: 0xe8b84a,
   panel: 0x111827,
@@ -22,7 +23,7 @@ export const COLOR = {
 } as const;
 
 export type TowerKind = 'arrow' | 'cannon' | 'frost' | 'lightning' | 'barracks';
-export type EnemyKind = 'runner' | 'tank' | 'brute' | 'swarm' | 'shaman';
+export type EnemyKind = 'runner' | 'tank' | 'brute' | 'swarm' | 'shaman' | 'splitter';
 
 export interface TowerDef {
   kind: TowerKind;
@@ -141,6 +142,7 @@ export const ENEMIES: Record<EnemyKind, EnemyDef> = {
   tank: { kind: 'tank', hp: 95, speed: 44, gold: 16, texture: 'enemy_tank' },
   brute: { kind: 'brute', hp: 190, speed: 36, gold: 28, texture: 'enemy_brute' },
   swarm: { kind: 'swarm', hp: 18, speed: 96, gold: 5, texture: 'enemy_swarm' },
+  splitter: { kind: 'splitter', hp: 52, speed: 50, gold: 14, texture: 'enemy_splitter' },
 };
 
 export interface WaveSpawn {
@@ -381,12 +383,14 @@ const WAVES_MAP04: WaveSpawn[][] = [
     { kind: 'runner', count: 12, interval: 480, delay: 200 },
     { kind: 'swarm', count: 20, interval: 180, delay: 250 },
     { kind: 'shaman', count: 3, interval: 1500, delay: 800 },
+    { kind: 'splitter', count: 2, interval: 1600, delay: 1000 },
     { kind: 'tank', count: 8, interval: 900, delay: 1000 },
   ],
   [
     { kind: 'swarm', count: 24, interval: 150, delay: 100 },
     { kind: 'runner', count: 14, interval: 400, delay: 200 },
     { kind: 'shaman', count: 4, interval: 1200, delay: 600 },
+    { kind: 'splitter', count: 3, interval: 1600, delay: 1000 },
     { kind: 'tank', count: 10, interval: 750, delay: 800 },
     { kind: 'brute', count: 5, interval: 1400, delay: 2800 },
   ],
@@ -441,6 +445,7 @@ const WAVES_MAP05: WaveSpawn[][] = [
     { kind: 'runner', count: 14, interval: 440, delay: 150 },
     { kind: 'swarm', count: 22, interval: 160, delay: 200 },
     { kind: 'shaman', count: 3, interval: 1400, delay: 700 },
+    { kind: 'splitter', count: 3, interval: 1600, delay: 1000 },
     { kind: 'tank', count: 9, interval: 820, delay: 900 },
     { kind: 'brute', count: 2, interval: 1600, delay: 3600 },
   ],
@@ -448,6 +453,7 @@ const WAVES_MAP05: WaveSpawn[][] = [
     { kind: 'swarm', count: 28, interval: 130, delay: 80 },
     { kind: 'runner', count: 16, interval: 360, delay: 150 },
     { kind: 'shaman', count: 5, interval: 1100, delay: 500 },
+    { kind: 'splitter', count: 4, interval: 1600, delay: 1000 },
     { kind: 'tank', count: 12, interval: 700, delay: 700 },
     { kind: 'brute', count: 6, interval: 1200, delay: 2400 },
   ],
@@ -510,6 +516,7 @@ const WAVES_MAP06: WaveSpawn[][] = [
     { kind: 'runner', count: 14, interval: 420, delay: 150 },
     { kind: 'swarm', count: 22, interval: 160, delay: 200 },
     { kind: 'shaman', count: 4, interval: 1300, delay: 700 },
+    { kind: 'splitter', count: 3, interval: 1600, delay: 1000 },
     { kind: 'tank', count: 9, interval: 800, delay: 900 },
     { kind: 'brute', count: 2, interval: 1600, delay: 3500 },
   ],
@@ -517,6 +524,7 @@ const WAVES_MAP06: WaveSpawn[][] = [
     { kind: 'swarm', count: 30, interval: 120, delay: 80 },
     { kind: 'runner', count: 16, interval: 340, delay: 150 },
     { kind: 'shaman', count: 5, interval: 1100, delay: 500 },
+    { kind: 'splitter', count: 5, interval: 1600, delay: 1000 },
     { kind: 'tank', count: 12, interval: 680, delay: 700 },
     { kind: 'brute', count: 6, interval: 1200, delay: 2200 },
   ],
