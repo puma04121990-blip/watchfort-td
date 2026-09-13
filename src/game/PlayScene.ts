@@ -1439,9 +1439,7 @@ export class PlayScene extends Phaser.Scene {
       const gained = e.gold + bonus;
       this.goldEarned += gained;
       GameState.addCoins(gained);
-      if (bonus > 0) {
-        this.spawnFloatBonus(spawnX, spawnY, bonus);
-      }
+      this.spawnFloatBonus(spawnX, spawnY, gained);
       this.showStreakLabel();
       if (e.kind === 'brute' && !this.ended) {
         this.cameras.main.shake(180, 0.006);
@@ -1511,7 +1509,7 @@ export class PlayScene extends Phaser.Scene {
     const text = this.add
       .text(x, y - 40, `+${n}`, {
         fontFamily: 'system-ui, sans-serif',
-        fontSize: '18px',
+        fontSize: '16px',
         color: '#86EFAC',
         fontStyle: 'bold',
         stroke: '#111827',
