@@ -204,6 +204,9 @@ export class PlayScene extends Phaser.Scene {
   private bossBarRoot: Phaser.GameObjects.Container | null = null;
   private bossBarFill: Phaser.GameObjects.Rectangle | null = null;
   private bossBarLabel: Phaser.GameObjects.Text | null = null;
+  private runKills = 0;
+  private goldEarned = 0;
+  private runMs = 0;
 
   constructor() {
     super({ key: 'PlayScene' });
@@ -245,6 +248,9 @@ export class PlayScene extends Phaser.Scene {
     this.bossBarRoot = null;
     this.bossBarFill = null;
     this.bossBarLabel = null;
+    this.runKills = 0;
+    this.goldEarned = 0;
+    this.runMs = 0;
 
     this.mapDef = getMap(GameState.selectedMapId);
     this.totalWaves = this.mapDef.waves.length;
@@ -288,6 +294,7 @@ export class PlayScene extends Phaser.Scene {
     const now = this.time.now;
     // Scene delta is not scaled by Clock.timeScale; multiply for movement/shots.
     const dt = delta * this.speedMul;
+    this.runMs += dt;
     this.tickBuildTimer();
     this.spawnDue(now);
     this.stepEnemies(dt, now);
@@ -900,6 +907,9 @@ export class PlayScene extends Phaser.Scene {
     e.hpBg.destroy();
     e.hpFg.destroy();
     AudioBus.playSfx('gate');
+    if (!this.ended) {
+      this.cameras.main.shake(120, 0.004);
+    }
     const dead = GameState.hitGate(1);
     this.refreshHud();
     if (dead) this.fail();
@@ -1130,7 +1140,12 @@ export class PlayScene extends Phaser.Scene {
       e.sprite.destroy();
       e.hpBg.destroy();
       e.hpFg.destroy();
+      this.runKills += 1;
+      this.goldEarned += e.gold;
       GameState.addCoins(e.gold);
+      if (e.kind === 'brute' && !this.ended) {
+        this.cameras.main.shake(180, 0.006);
+      }
       AudioBus.playSfx('die');
       AudioBus.playSfx('coin');
       this.refreshHud();
@@ -1376,7 +1391,7 @@ export class PlayScene extends Phaser.Scene {
     dim.setInteractive();
     root.add(dim);
 
-    const titleY = victory ? GAME_H / 2 - 90 : GAME_H / 2 - 110;
+    const titleY = victory ? GAME_H / 2 - 120 : GAME_H / 2 - 140;
     root.add(
       this.add
         .text(GAME_W / 2, titleY, title, {
@@ -1388,33 +1403,58 @@ export class PlayScene extends Phaser.Scene {
         .setOrigin(0.5),
     );
 
+    const statStyle = {
+      fontFamily: 'system-ui, sans-serif',
+      fontSize: '16px',
+      color: '#F3F4F6',
+    } as const;
+    const statY = titleY + 40;
+    root.add(
+      this.add
+        .text(GAME_W / 2, statY, t('play.statKills', { n: this.runKills }), statStyle)
+        .setOrigin(0.5),
+    );
+    root.add(
+      this.add
+        .text(GAME_W / 2, statY + 22, t('play.statGold', { n: this.goldEarned }), statStyle)
+        .setOrigin(0.5),
+    );
+    root.add(
+      this.add
+        .text(GAME_W / 2, statY + 44, t('play.statTime', { n: formatRunTime(this.runMs) }), statStyle)
+        .setOrigin(0.5),
+    );
+
+    let belowStats = statY + 72;
     if (victory) {
       root.add(
         this.add
-          .text(GAME_W / 2, titleY + 42, starString(this.lastWinStars), {
+          .text(GAME_W / 2, belowStats, starString(this.lastWinStars), {
             fontFamily: 'system-ui, sans-serif',
             fontSize: '28px',
             color: '#E8B84A',
           })
           .setOrigin(0.5),
       );
+      belowStats += 34;
       if (this.lastWinMeta > 0) {
         root.add(
           this.add
-            .text(GAME_W / 2, titleY + 72, t('play.metaGain', { n: this.lastWinMeta }), {
+            .text(GAME_W / 2, belowStats, t('play.metaGain', { n: this.lastWinMeta }), {
               fontFamily: 'system-ui, sans-serif',
               fontSize: '16px',
               color: '#E8B84A',
             })
             .setOrigin(0.5),
         );
+        belowStats += 28;
       }
     }
 
     const btnW = 200;
     const btnH = 48;
     const gap = 16;
-    let cy = victory ? GAME_H / 2 + 8 : GAME_H / 2 - 20;
+    let cy = belowStats + 16;
 
     if (victory && this.lastWinMeta > 0 && !this.metaDoubled) {
       const dblBg = this.add
@@ -1721,6 +1761,14 @@ export class PlayScene extends Phaser.Scene {
   }
 
 
+}
+
+
+function formatRunTime(ms: number): string {
+  const totalSec = Math.max(0, Math.floor(ms / 1000));
+  const m = Math.floor(totalSec / 60);
+  const s = totalSec % 60;
+  return `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
 }
 
 function starsForGate(gateHp: number, maxGateHp: number): number {
