@@ -1422,6 +1422,20 @@ export class PlayScene extends Phaser.Scene {
       fx.destroy();
     });
     if (s.splash > 0) {
+      const ringColor = s.splash >= 85 ? 0xb45309 : 0xe8b84a;
+      const baseR = 14;
+      const ring = this.add.circle(ix, iy, baseR, ringColor, 0.42).setDepth(12);
+      this.tweens.add({
+        targets: ring,
+        scale: Math.max(1.2, s.splash / baseR),
+        alpha: 0,
+        duration: 320,
+        ease: 'Cubic.Out',
+        onComplete: () => {
+          ring.destroy();
+        },
+      });
+      this.cameras.main.shake(s.splash >= 85 ? 110 : 80, s.splash >= 85 ? 0.0045 : 0.003);
       for (const e of this.enemies) {
         if (!e.alive) continue;
         if (Math.hypot(e.x - ix, e.y - iy) <= s.splash) {

@@ -71,12 +71,12 @@ export class MenuScene extends Phaser.Scene {
       })
       .setOrigin(0.5);
 
-    const cardW = 92;
-    const cardH = 72;
-    const gap = 4;
-    const totalW = MAP_LIST.length * cardW + (MAP_LIST.length - 1) * gap;
-    const startX = width / 2 - totalW / 2 + cardW / 2;
-    const cardY = height * 0.34;
+    const cardW = 118;
+    const cardH = 64;
+    const gap = 8;
+    const cols = 4;
+    const rows = Math.ceil(MAP_LIST.length / cols);
+    const row0Y = height * 0.275;
 
     const nameKey: Record<string, string> = {
       map01: 'menu.map1',
@@ -91,7 +91,14 @@ export class MenuScene extends Phaser.Scene {
     for (let i = 0; i < MAP_LIST.length; i++) {
       const map = MAP_LIST[i]!;
       const mapId = map.id as MapId;
-      const x = startX + i * (cardW + gap);
+      const row = Math.floor(i / cols);
+      const col = i % cols;
+      const rowCount =
+        row === rows - 1 ? MAP_LIST.length - row * cols : cols;
+      const rowW = rowCount * cardW + (rowCount - 1) * gap;
+      const rowStartX = width / 2 - rowW / 2 + cardW / 2;
+      const x = rowStartX + col * (cardW + gap);
+      const cardY = row0Y + row * (cardH + 10);
       const unlocked = GameState.isMapUnlocked(mapId);
       const selected = GameState.selectedMapId === mapId;
       const stars = GameState.bestStars(mapId);
@@ -103,9 +110,9 @@ export class MenuScene extends Phaser.Scene {
         .setStrokeStyle(selected ? 3 : 2, stroke);
 
       this.add
-        .text(x, cardY - 24, t(nameKey[mapId] ?? map.id), {
+        .text(x, cardY - 16, t(nameKey[mapId] ?? map.id), {
           fontFamily: 'system-ui, sans-serif',
-          fontSize: '18px',
+          fontSize: '15px',
           color: unlocked ? '#F3F4F6' : '#9CA3AF',
           fontStyle: 'bold',
         })
@@ -118,18 +125,18 @@ export class MenuScene extends Phaser.Scene {
             ? t('menu.stars', { n: 0 })
             : t('menu.locked');
       this.add
-        .text(x, cardY + 6, starLabel, {
+        .text(x, cardY + 8, starLabel, {
           fontFamily: 'system-ui, sans-serif',
-          fontSize: unlocked && stars === 0 ? '13px' : '16px',
+          fontSize: unlocked && stars === 0 ? '12px' : '14px',
           color: unlocked ? '#E8B84A' : '#9CA3AF',
         })
         .setOrigin(0.5);
 
       if (!unlocked) {
         this.add
-          .text(x, cardY + 30, t('menu.locked'), {
+          .text(x, cardY + 26, t('menu.locked'), {
             fontFamily: 'system-ui, sans-serif',
-            fontSize: '12px',
+            fontSize: '11px',
             color: '#9CA3AF',
           })
           .setOrigin(0.5);
@@ -163,12 +170,12 @@ export class MenuScene extends Phaser.Scene {
     this.buildAudioToggles(width, height);
 
     const playBtn = this.add
-      .image(width / 2, height * 0.8, 'btn_play')
+      .image(width / 2, height * 0.83, 'btn_play')
       .setDisplaySize(220, 68)
       .setInteractive({ useHandCursor: true });
 
     const playLabel = this.add
-      .text(width / 2, height * 0.8, t('menu.play'), {
+      .text(width / 2, height * 0.83, t('menu.play'), {
         fontFamily: 'system-ui, sans-serif',
         fontSize: '22px',
         color: '#F3F4F6',
@@ -211,7 +218,7 @@ export class MenuScene extends Phaser.Scene {
 
 
   private buildDifficulty(width: number, height: number): void {
-    const y = height * 0.435;
+    const y = height * 0.48;
     const hardUnlocked = GameState.isHardUnlocked();
     const isHard = GameState.difficulty === 'hard';
     let label: string;
@@ -258,7 +265,7 @@ export class MenuScene extends Phaser.Scene {
   }
 
   private buildShop(width: number, height: number): void {
-    const shopY0 = height * 0.455;
+    const shopY0 = height * 0.50;
     const rowH = 28;
     const rows: Array<{
       labelKey: string;
