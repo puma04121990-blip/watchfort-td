@@ -15,6 +15,9 @@ export async function createGame(parent: string | HTMLElement): Promise<Phaser.G
     GameState.wins = saved.wins;
     GameState.map01Stars = saved.map01Stars;
     GameState.map02Stars = saved.map02Stars;
+    GameState.metaGold = Math.max(0, saved.metaGold);
+    GameState.startGoldLevel = Math.max(0, Math.min(3, Math.floor(saved.startGoldLevel)));
+    GameState.arrowDmgLevel = Math.max(0, Math.min(3, Math.floor(saved.arrowDmgLevel)));
   }
 
   const config: Phaser.Types.Core.GameConfig = {

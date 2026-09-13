@@ -3,6 +3,10 @@ import type { GameStateSnapshot } from '../state/GameState';
 
 const SAVE_KEY = 'gameState';
 
+function num(v: unknown, fallback: number): number {
+  return typeof v === 'number' && Number.isFinite(v) ? v : fallback;
+}
+
 export async function loadGameState(): Promise<GameStateSnapshot | null> {
   const gp = getGp();
   await gp.player.load();
@@ -13,11 +17,14 @@ export async function loadGameState(): Promise<GameStateSnapshot | null> {
   return {
     coins: s.coins,
     gateHp: s.gateHp,
-    maxGateHp: typeof s.maxGateHp === 'number' ? s.maxGateHp : 15,
-    wave: typeof s.wave === 'number' ? s.wave : 0,
-    wins: typeof s.wins === 'number' ? s.wins : 0,
-    map01Stars: typeof s.map01Stars === 'number' ? s.map01Stars : 0,
-    map02Stars: typeof s.map02Stars === 'number' ? s.map02Stars : 0,
+    maxGateHp: num(s.maxGateHp, 15),
+    wave: num(s.wave, 0),
+    wins: num(s.wins, 0),
+    map01Stars: num(s.map01Stars, 0),
+    map02Stars: num(s.map02Stars, 0),
+    metaGold: num(s.metaGold, 0),
+    startGoldLevel: num(s.startGoldLevel, 0),
+    arrowDmgLevel: num(s.arrowDmgLevel, 0),
   };
 }
 

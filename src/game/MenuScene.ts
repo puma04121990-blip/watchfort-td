@@ -3,6 +3,7 @@ import { t, setLocale, getLocale } from '../i18n';
 import { AudioBus } from '../audio/AudioBus';
 import { COLOR, MAP_LIST } from './defs';
 import { GameState, type MapId } from '../state/GameState';
+import { saveGameState } from '../platform/saves';
 
 export class MenuScene extends Phaser.Scene {
   constructor() {
@@ -20,32 +21,41 @@ export class MenuScene extends Phaser.Scene {
 
     this.add.rectangle(width / 2, height / 2, width, height, COLOR.panel);
     this.add
-      .rectangle(width / 2, height / 2, width * 0.82, height * 0.78, COLOR.shade, 0.96)
+      .rectangle(width / 2, height / 2, width * 0.82, height * 0.86, COLOR.shade, 0.96)
       .setStrokeStyle(2, COLOR.gold);
 
     this.add
-      .text(width / 2, height * 0.16, t('menu.title'), {
+      .text(width / 2, height * 0.1, t('menu.title'), {
         fontFamily: 'system-ui, sans-serif',
-        fontSize: '34px',
+        fontSize: '32px',
         color: '#F3F4F6',
         fontStyle: 'bold',
       })
       .setOrigin(0.5);
 
     this.add
-      .text(width / 2, height * 0.23, t('menu.subtitle'), {
+      .text(width / 2, height * 0.155, t('menu.subtitle'), {
         fontFamily: 'system-ui, sans-serif',
-        fontSize: '15px',
+        fontSize: '14px',
         color: '#E8B84A',
       })
       .setOrigin(0.5);
 
+    this.add
+      .text(width / 2, height * 0.2, t('menu.metaGold', { n: GameState.metaGold }), {
+        fontFamily: 'system-ui, sans-serif',
+        fontSize: '16px',
+        color: '#E8B84A',
+        fontStyle: 'bold',
+      })
+      .setOrigin(0.5);
+
     const cardW = 200;
-    const cardH = 110;
+    const cardH = 96;
     const gap = 24;
     const totalW = MAP_LIST.length * cardW + (MAP_LIST.length - 1) * gap;
     const startX = width / 2 - totalW / 2 + cardW / 2;
-    const cardY = height * 0.42;
+    const cardY = height * 0.34;
 
     const nameKey: Record<string, string> = {
       map01: 'menu.map1',
@@ -67,9 +77,9 @@ export class MenuScene extends Phaser.Scene {
         .setStrokeStyle(selected ? 3 : 2, stroke);
 
       this.add
-        .text(x, cardY - 28, t(nameKey[mapId] ?? map.id), {
+        .text(x, cardY - 24, t(nameKey[mapId] ?? map.id), {
           fontFamily: 'system-ui, sans-serif',
-          fontSize: '20px',
+          fontSize: '18px',
           color: unlocked ? '#F3F4F6' : '#9CA3AF',
           fontStyle: 'bold',
         })
@@ -82,16 +92,16 @@ export class MenuScene extends Phaser.Scene {
             ? t('menu.stars', { n: 0 })
             : t('menu.locked');
       this.add
-        .text(x, cardY + 8, starLabel, {
+        .text(x, cardY + 6, starLabel, {
           fontFamily: 'system-ui, sans-serif',
-          fontSize: unlocked && stars === 0 ? '14px' : '18px',
+          fontSize: unlocked && stars === 0 ? '13px' : '16px',
           color: unlocked ? '#E8B84A' : '#9CA3AF',
         })
         .setOrigin(0.5);
 
       if (!unlocked) {
         this.add
-          .text(x, cardY + 36, t('menu.locked'), {
+          .text(x, cardY + 30, t('menu.locked'), {
             fontFamily: 'system-ui, sans-serif',
             fontSize: '12px',
             color: '#9CA3AF',
@@ -120,12 +130,14 @@ export class MenuScene extends Phaser.Scene {
       }
     }
 
+    this.buildShop(width, height);
+
     const playBtn = this.add
-      .image(width / 2, height * 0.64, 'btn_play')
+      .image(width / 2, height * 0.78, 'btn_play')
       .setInteractive({ useHandCursor: true });
 
     const playLabel = this.add
-      .text(width / 2, height * 0.64, t('menu.play'), {
+      .text(width / 2, height * 0.78, t('menu.play'), {
         fontFamily: 'system-ui, sans-serif',
         fontSize: '22px',
         color: '#F3F4F6',
@@ -151,7 +163,7 @@ export class MenuScene extends Phaser.Scene {
     playLabel.setInteractive({ useHandCursor: true }).on('pointerdown', start);
 
     const locLabel = this.add
-      .text(width / 2, height * 0.78, getLocale() === 'ru' ? 'RU | en' : 'ru | EN', {
+      .text(width / 2, height * 0.9, getLocale() === 'ru' ? 'RU | en' : 'ru | EN', {
         fontFamily: 'system-ui, sans-serif',
         fontSize: '14px',
         color: '#22D3EE',
@@ -163,6 +175,70 @@ export class MenuScene extends Phaser.Scene {
       AudioBus.playUi('click');
       setLocale(getLocale() === 'ru' ? 'en' : 'ru');
       this.scene.restart();
+    });
+  }
+
+  private buildShop(width: number, height: number): void {
+    const shopY0 = height * 0.5;
+    const rowH = 42;
+    const rows: Array<{
+      labelKey: string;
+      level: number;
+      cost: number | null;
+      buy: () => boolean;
+    }> = [
+      {
+        labelKey: 'menu.upStartGold',
+        level: GameState.startGoldLevel,
+        cost: GameState.startGoldNextCost(),
+        buy: () => GameState.buyStartGold(),
+      },
+      {
+        labelKey: 'menu.upArrowDmg',
+        level: GameState.arrowDmgLevel,
+        cost: GameState.arrowDmgNextCost(),
+        buy: () => GameState.buyArrowDmg(),
+      },
+    ];
+
+    rows.forEach((row, i) => {
+      const y = shopY0 + i * rowH;
+      const maxed = row.cost === null;
+      const info = maxed
+        ? `${t(row.labelKey)}  Lv.${row.level}  ${t('menu.maxed')}`
+        : `${t(row.labelKey)}  Lv.${row.level}  (${row.cost})`;
+
+      this.add
+        .text(width / 2 - 110, y, info, {
+          fontFamily: 'system-ui, sans-serif',
+          fontSize: '13px',
+          color: maxed ? '#9CA3AF' : '#F3F4F6',
+        })
+        .setOrigin(0, 0.5);
+
+      if (maxed) return;
+
+      const btn = this.add
+        .rectangle(width / 2 + 130, y, 72, 30, COLOR.towerBlue)
+        .setStrokeStyle(2, COLOR.gold)
+        .setInteractive({ useHandCursor: true });
+      this.add
+        .text(width / 2 + 130, y, t('menu.buy'), {
+          fontFamily: 'system-ui, sans-serif',
+          fontSize: '13px',
+          color: '#F3F4F6',
+        })
+        .setOrigin(0.5);
+
+      btn.on('pointerdown', () => {
+        if (!row.buy()) {
+          AudioBus.playUi('error');
+          return;
+        }
+        AudioBus.playUi('confirm');
+        void saveGameState(GameState.snapshot());
+        this.scene.restart();
+      });
     });
   }
 }

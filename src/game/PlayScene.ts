@@ -4,6 +4,7 @@ import { GameState } from '../state/GameState';
 import { AudioBus } from '../audio/AudioBus';
 import { hookLevelComplete, hookLevelFail } from '../platform/hooks';
 import { ads } from '../platform/ads';
+import { saveGameState } from '../platform/saves';
 import {
   TILE,
   COLS,
@@ -173,6 +174,8 @@ export class PlayScene extends Phaser.Scene {
   private selectedTower: TowerActor | null = null;
   private navigating = false;
   private lastWinStars = 0;
+  private lastWinMeta = 0;
+  private metaDoubled = false;
   private mapDef!: MapDef;
   private totalWaves = 3;
 
@@ -202,6 +205,8 @@ export class PlayScene extends Phaser.Scene {
     this.selectedTower = null;
     this.navigating = false;
     this.lastWinStars = 0;
+    this.lastWinMeta = 0;
+    this.metaDoubled = false;
     this.time.paused = false;
 
     this.mapDef = getMap(GameState.selectedMapId);
@@ -634,6 +639,9 @@ export class PlayScene extends Phaser.Scene {
       return;
     }
     const def = cloneTowerDef(this.selected);
+    if (this.selected === 'arrow') {
+      def.damage += GameState.arrowDamageBonus();
+    }
     const { x, y } = cellCenter(c, r);
     const sprite = this.add.image(x, y, def.texture).setDisplaySize(52, 52).setDepth(5);
     const tw: TowerActor = {
@@ -1124,7 +1132,8 @@ export class PlayScene extends Phaser.Scene {
     this.ended = true;
     this.clearTowerSelection();
     this.lastWinStars = starsForGate(GameState.gateHp, GameState.maxGateHp);
-    hookLevelComplete(this.lastWinStars);
+    this.lastWinMeta = hookLevelComplete(this.lastWinStars);
+    this.metaDoubled = false;
     this.showBanner(t('play.win'), true);
   }
 
@@ -1174,12 +1183,43 @@ export class PlayScene extends Phaser.Scene {
           })
           .setOrigin(0.5),
       );
+      if (this.lastWinMeta > 0) {
+        root.add(
+          this.add
+            .text(GAME_W / 2, titleY + 72, t('play.metaGain', { n: this.lastWinMeta }), {
+              fontFamily: 'system-ui, sans-serif',
+              fontSize: '16px',
+              color: '#E8B84A',
+            })
+            .setOrigin(0.5),
+        );
+      }
     }
 
     const btnW = 200;
     const btnH = 48;
     const gap = 16;
-    let cy = victory ? GAME_H / 2 + 20 : GAME_H / 2 - 20;
+    let cy = victory ? GAME_H / 2 + 8 : GAME_H / 2 - 20;
+
+    if (victory && this.lastWinMeta > 0 && !this.metaDoubled) {
+      const dblBg = this.add
+        .rectangle(GAME_W / 2, cy, btnW, btnH, COLOR.towerBlue)
+        .setStrokeStyle(2, COLOR.gold)
+        .setInteractive({ useHandCursor: true });
+      const dblLabel = this.add
+        .text(GAME_W / 2, cy, t('play.doubleMeta'), {
+          fontFamily: 'system-ui, sans-serif',
+          fontSize: '18px',
+          color: '#F3F4F6',
+        })
+        .setOrigin(0.5);
+      dblBg.on('pointerdown', () => {
+        void this.onDoubleMeta();
+      });
+      root.add(dblBg);
+      root.add(dblLabel);
+      cy += btnH + gap;
+    }
 
     if (!victory) {
       const contBg = this.add
@@ -1246,6 +1286,20 @@ export class PlayScene extends Phaser.Scene {
     });
     root.add(menuBg);
     root.add(menuLabel);
+  }
+
+  private async onDoubleMeta(): Promise<void> {
+    if (this.navigating || !this.ended || this.metaDoubled || this.lastWinMeta <= 0) return;
+    this.navigating = true;
+    AudioBus.playUi('click');
+    const ok = await ads.showRewardedVideo();
+    this.navigating = false;
+    if (!ok) return;
+    GameState.addMetaGold(this.lastWinMeta);
+    this.metaDoubled = true;
+    this.lastWinMeta *= 2;
+    void saveGameState(GameState.snapshot());
+    this.showBanner(t('play.win'), true);
   }
 
   private async onRetry(): Promise<void> {
