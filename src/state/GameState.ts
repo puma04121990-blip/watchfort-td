@@ -103,8 +103,9 @@ class GameStateImpl {
   selectedMapId: MapId = 'map01';
 
   resetRun(): void {
-    this.coins = RUN_COINS + this.startGoldLevel * 20;
-    this.gateHp = this.maxGateHp;
+    const start = Math.round((RUN_COINS + this.startGoldLevel * 20) * this.startGoldMult());
+    this.coins = Math.max(40, start);
+    this.gateHp = this.runGateHp();
     this.wave = 0;
   }
 
@@ -233,16 +234,31 @@ class GameStateImpl {
 
   /** Enemy HP multiplier for the selected difficulty. */
   enemyHpMult(): number {
-    return this.difficulty === 'hard' ? 1.4 : 1.0;
+    return this.difficulty === 'hard' ? 1.55 : 1.0;
   }
 
   /** Enemy speed multiplier for the selected difficulty. */
   enemySpeedMult(): number {
-    return this.difficulty === 'hard' ? 1.08 : 1.0;
+    return this.difficulty === 'hard' ? 1.12 : 1.0;
   }
 
   /** Win meta-gold multiplier for the selected difficulty. */
   winMetaMult(): number {
+    return this.difficulty === 'hard' ? 1.55 : 1.0;
+  }
+
+  /** Starting run gold multiplier (Hard pays less up front). */
+  startGoldMult(): number {
+    return this.difficulty === 'hard' ? 0.85 : 1.0;
+  }
+
+  /** Gate HP for a fresh run. */
+  runGateHp(): number {
+    return this.difficulty === 'hard' ? Math.max(8, this.maxGateHp - 3) : this.maxGateHp;
+  }
+
+  /** Shaman heal pulse multiplier. */
+  shamanHealMult(): number {
     return this.difficulty === 'hard' ? 1.35 : 1.0;
   }
 

@@ -1016,7 +1016,7 @@ export class PlayScene extends Phaser.Scene {
   private stepShamanHeals(now: number): void {
     const HEAL_CD = 2000;
     const HEAL_R = 100;
-    const HEAL_AMT = 10;
+    const HEAL_AMT = Math.max(1, Math.round(10 * GameState.shamanHealMult()));
     for (const s of this.enemies) {
       if (!s.alive || s.kind !== 'shaman') continue;
       if (s.nextHealAt === 0) {
