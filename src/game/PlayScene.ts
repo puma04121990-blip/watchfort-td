@@ -424,15 +424,15 @@ export class PlayScene extends Phaser.Scene {
       const y = y0 + HUD_H / 2;
       const locked = kind === 'barracks' && !GameState.isBarracksUnlocked();
       const mark = this.add
-        .rectangle(x, y, 110, 68, COLOR.shade)
-        .setStrokeStyle(2, this.selected === kind ? TOWER_COLORS[kind] : 0x374151)
+        .rectangle(x, y, 112, 70, 0x162033)
+        .setStrokeStyle(3, this.selected === kind ? COLOR.gold : 0x4b5568)
         .setDepth(102)
         .setInteractive({ useHandCursor: !locked })
         .setAlpha(locked ? 0.5 : 1);
       this.selectMarks.push(mark);
       const icon = this.add
         .image(x - 32, y, TOWERS[kind].texture)
-        .setDisplaySize(36, 36)
+        .setDisplaySize(44, 44)
         .setDepth(103);
       if (locked) icon.setTint(0x667066);
       this.selectIcons.push(icon);
@@ -467,7 +467,7 @@ export class PlayScene extends Phaser.Scene {
 
     this.startBg = this.add
       .rectangle(GAME_W - 96, y0 + HUD_H / 2, 156, 52, COLOR.towerBlue)
-      .setStrokeStyle(2, COLOR.gold)
+      .setStrokeStyle(3, COLOR.gold)
       .setDepth(102)
       .setInteractive({ useHandCursor: true });
     this.startLabel = this.add
@@ -580,7 +580,7 @@ export class PlayScene extends Phaser.Scene {
       const kind = HUD_KINDS[i];
       if (!kind) return;
       const locked = kind === 'barracks' && !GameState.isBarracksUnlocked();
-      mark.setStrokeStyle(3, this.selected === kind ? TOWER_COLORS[kind] : 0x374151);
+      mark.setStrokeStyle(3, this.selected === kind ? COLOR.gold : 0x4b5568);
       mark.setAlpha(locked ? 0.5 : 1);
       const icon = this.selectIcons[i];
       if (icon) {

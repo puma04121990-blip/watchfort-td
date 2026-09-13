@@ -161,6 +161,7 @@ export class MenuScene extends Phaser.Scene {
 
     const playBtn = this.add
       .image(width / 2, height * 0.8, 'btn_play')
+      .setDisplaySize(220, 68)
       .setInteractive({ useHandCursor: true });
 
     const playLabel = this.add
