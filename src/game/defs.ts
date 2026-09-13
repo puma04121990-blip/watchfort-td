@@ -99,26 +99,20 @@ export interface WaveSpawn {
   delay: number;
 }
 
-export const WAVES: WaveSpawn[][] = [
-  [{ kind: 'runner', count: 8, interval: 750, delay: 200 }],
-  [
-    { kind: 'runner', count: 6, interval: 650, delay: 200 },
-    { kind: 'tank', count: 3, interval: 1400, delay: 1800 },
-  ],
-  [
-    { kind: 'runner', count: 8, interval: 550, delay: 200 },
-    { kind: 'tank', count: 4, interval: 1100, delay: 1600 },
-    { kind: 'brute', count: 2, interval: 2200, delay: 4200 },
-  ],
-];
-
 export interface Cell {
   c: number;
   r: number;
 }
 
+export interface MapDef {
+  id: string;
+  path: Cell[];
+  gate: Cell;
+  waves: WaveSpawn[][];
+}
+
 /** Winding dirt path from the west spawn to the east gate. */
-export const PATH: Cell[] = [
+const PATH_MAP01: Cell[] = [
   { c: 0, r: 2 },
   { c: 1, r: 2 },
   { c: 2, r: 2 },
@@ -155,10 +149,111 @@ export const PATH: Cell[] = [
   { c: 11, r: 8 },
 ];
 
-const PATH_SET = new Set(PATH.map((p) => `${p.c},${p.r}`));
+const WAVES_MAP01: WaveSpawn[][] = [
+  [{ kind: 'runner', count: 8, interval: 750, delay: 200 }],
+  [
+    { kind: 'runner', count: 6, interval: 650, delay: 200 },
+    { kind: 'tank', count: 3, interval: 1400, delay: 1800 },
+  ],
+  [
+    { kind: 'runner', count: 8, interval: 550, delay: 200 },
+    { kind: 'tank', count: 4, interval: 1100, delay: 1600 },
+    { kind: 'brute', count: 2, interval: 2200, delay: 4200 },
+  ],
+];
 
-export function isPath(c: number, r: number): boolean {
-  return PATH_SET.has(`${c},${r}`);
+/** North spawn → winding gorge → south gate. */
+const PATH_MAP02: Cell[] = [
+  { c: 5, r: 0 },
+  { c: 5, r: 1 },
+  { c: 5, r: 2 },
+  { c: 4, r: 2 },
+  { c: 3, r: 2 },
+  { c: 2, r: 2 },
+  { c: 1, r: 2 },
+  { c: 1, r: 3 },
+  { c: 1, r: 4 },
+  { c: 1, r: 5 },
+  { c: 2, r: 5 },
+  { c: 3, r: 5 },
+  { c: 4, r: 5 },
+  { c: 5, r: 5 },
+  { c: 6, r: 5 },
+  { c: 7, r: 5 },
+  { c: 8, r: 5 },
+  { c: 8, r: 4 },
+  { c: 8, r: 3 },
+  { c: 8, r: 2 },
+  { c: 9, r: 2 },
+  { c: 10, r: 2 },
+  { c: 10, r: 3 },
+  { c: 10, r: 4 },
+  { c: 10, r: 5 },
+  { c: 10, r: 6 },
+  { c: 10, r: 7 },
+  { c: 9, r: 7 },
+  { c: 8, r: 7 },
+  { c: 7, r: 7 },
+  { c: 6, r: 7 },
+  { c: 5, r: 7 },
+  { c: 4, r: 7 },
+  { c: 3, r: 7 },
+  { c: 3, r: 8 },
+  { c: 3, r: 9 },
+];
+
+/** Slightly harder: more tanks/brutes. */
+const WAVES_MAP02: WaveSpawn[][] = [
+  [
+    { kind: 'runner', count: 8, interval: 700, delay: 200 },
+    { kind: 'tank', count: 2, interval: 1400, delay: 2200 },
+  ],
+  [
+    { kind: 'runner', count: 8, interval: 600, delay: 200 },
+    { kind: 'tank', count: 5, interval: 1200, delay: 1400 },
+    { kind: 'brute', count: 1, interval: 2000, delay: 5000 },
+  ],
+  [
+    { kind: 'runner', count: 10, interval: 500, delay: 200 },
+    { kind: 'tank', count: 6, interval: 1000, delay: 1200 },
+    { kind: 'brute', count: 3, interval: 2000, delay: 3800 },
+  ],
+];
+
+export const MAPS: Record<string, MapDef> = {
+  map01: {
+    id: 'map01',
+    path: PATH_MAP01,
+    gate: PATH_MAP01[PATH_MAP01.length - 1] ?? { c: 11, r: 8 },
+    waves: WAVES_MAP01,
+  },
+  map02: {
+    id: 'map02',
+    path: PATH_MAP02,
+    gate: PATH_MAP02[PATH_MAP02.length - 1] ?? { c: 3, r: 9 },
+    waves: WAVES_MAP02,
+  },
+};
+
+export const MAP_LIST: MapDef[] = [MAPS.map01, MAPS.map02];
+
+export function getMap(id: string): MapDef {
+  return MAPS[id] ?? MAPS.map01;
+}
+
+const pathSetCache = new Map<string, Set<string>>();
+
+function pathSetFor(map: MapDef): Set<string> {
+  let s = pathSetCache.get(map.id);
+  if (!s) {
+    s = new Set(map.path.map((p) => `${p.c},${p.r}`));
+    pathSetCache.set(map.id, s);
+  }
+  return s;
+}
+
+export function isPath(map: MapDef, c: number, r: number): boolean {
+  return pathSetFor(map).has(`${c},${r}`);
 }
 
 export function cellCenter(c: number, r: number): { x: number; y: number } {
@@ -176,16 +271,13 @@ const ORTHO: Cell[] = [
   { c: 0, r: -1 },
 ];
 
-export function isAdjacentToPath(c: number, r: number): boolean {
+export function isAdjacentToPath(map: MapDef, c: number, r: number): boolean {
   for (const d of ORTHO) {
-    if (isPath(c + d.c, r + d.r)) return true;
+    if (isPath(map, c + d.c, r + d.r)) return true;
   }
   return false;
 }
 
-export function isPlaceableGrass(c: number, r: number): boolean {
-  return isInGrid(c, r) && !isPath(c, r) && isAdjacentToPath(c, r);
+export function isPlaceableGrass(map: MapDef, c: number, r: number): boolean {
+  return isInGrid(c, r) && !isPath(map, c, r) && isAdjacentToPath(map, c, r);
 }
-
-export const GATE_CELL: Cell = PATH[PATH.length - 1] ?? { c: 11, r: 8 };
-export const SPAWN_CELL: Cell = PATH[0] ?? { c: 0, r: 2 };

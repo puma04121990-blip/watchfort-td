@@ -11,17 +11,15 @@ import {
   HUD_H,
   GAME_W,
   GAME_H,
-  TOTAL_WAVES,
   COLOR,
-  PATH,
   TOWERS,
   ENEMIES,
-  WAVES,
-  GATE_CELL,
+  getMap,
   isPath,
   isPlaceableGrass,
   cellCenter,
   isInGrid,
+  type MapDef,
   type TowerKind,
   type EnemyKind,
   type TowerDef,
@@ -122,6 +120,8 @@ export class PlayScene extends Phaser.Scene {
   private selectedTower: TowerActor | null = null;
   private navigating = false;
   private lastWinStars = 0;
+  private mapDef!: MapDef;
+  private totalWaves = 3;
 
   constructor() {
     super({ key: 'PlayScene' });
@@ -150,10 +150,13 @@ export class PlayScene extends Phaser.Scene {
     this.lastWinStars = 0;
     this.time.paused = false;
 
+    this.mapDef = getMap(GameState.selectedMapId);
+    this.totalWaves = this.mapDef.waves.length;
+
     AudioBus.playMusic('play');
     this.cameras.main.setBackgroundColor(`#${COLOR.shade.toString(16).padStart(6, '0')}`);
 
-    this.waypoints = PATH.map((p) => cellCenter(p.c, p.r));
+    this.waypoints = this.mapDef.path.map((p) => cellCenter(p.c, p.r));
     this.drawField();
     this.rangeGfx = this.add.graphics().setDepth(3);
     this.buildHud();
@@ -195,11 +198,11 @@ export class PlayScene extends Phaser.Scene {
     for (let r = 0; r < ROWS; r++) {
       for (let c = 0; c < COLS; c++) {
         const { x, y } = cellCenter(c, r);
-        const key = isPath(c, r) ? 'tile_path' : 'tile_grass';
+        const key = isPath(this.mapDef, c, r) ? 'tile_path' : 'tile_grass';
         this.add.image(x, y, key).setDisplaySize(TILE, TILE).setDepth(0);
       }
     }
-    const gate = cellCenter(GATE_CELL.c, GATE_CELL.r);
+    const gate = cellCenter(this.mapDef.gate.c, this.mapDef.gate.r);
     this.add.image(gate.x, gate.y, 'tile_gate').setDisplaySize(TILE, TILE).setDepth(2);
   }
 
@@ -358,10 +361,10 @@ export class PlayScene extends Phaser.Scene {
   private refreshHud(): void {
     this.goldText.setText(`${t('play.gold')}: ${GameState.coins}`);
     this.gateText.setText(`${t('play.gate')}: ${GameState.gateHp}/${GameState.maxGateHp}`);
-    const shown = Math.min(Math.max(GameState.wave, 0), TOTAL_WAVES);
-    const phase = this.waveLive ? `${shown}/${TOTAL_WAVES}` : `${shown}/${TOTAL_WAVES} · ${t('play.waiting')}`;
+    const shown = Math.min(Math.max(GameState.wave, 0), this.totalWaves);
+    const phase = this.waveLive ? `${shown}/${this.totalWaves}` : `${shown}/${this.totalWaves} · ${t('play.waiting')}`;
     this.waveText.setText(`${t('play.wave')}: ${phase}`);
-    const canStart = !this.ended && !this.waveLive && !this.paused && GameState.wave < TOTAL_WAVES;
+    const canStart = !this.ended && !this.waveLive && !this.paused && GameState.wave < this.totalWaves;
     this.startBg.setFillStyle(canStart ? COLOR.towerBlue : COLOR.shade);
     this.startBg.setAlpha(canStart ? 1 : 0.55);
     this.startLabel.setText(canStart ? t('play.startWave') : t('play.waiting'));
@@ -387,7 +390,7 @@ export class PlayScene extends Phaser.Scene {
     const r = this.hoverRow;
     if (!isInGrid(c, r)) return;
     const key = `${c},${r}`;
-    const ok = isPlaceableGrass(c, r) && !this.occupied.has(key);
+    const ok = isPlaceableGrass(this.mapDef, c, r) && !this.occupied.has(key);
     const { x, y } = cellCenter(c, r);
     const def = TOWERS[this.selected];
     this.rangeGfx.fillStyle(ok ? COLOR.towerBlue : COLOR.enemyRed, 0.12);
@@ -548,7 +551,7 @@ export class PlayScene extends Phaser.Scene {
   private tryPlace(c: number, r: number): void {
     if (this.ended || this.paused) return;
     const key = `${c},${r}`;
-    if (!isPlaceableGrass(c, r) || this.occupied.has(key)) {
+    if (!isPlaceableGrass(this.mapDef, c, r) || this.occupied.has(key)) {
       AudioBus.playUi('error');
       return;
     }
@@ -582,7 +585,7 @@ export class PlayScene extends Phaser.Scene {
   }
 
   private tryStartWave(): void {
-    if (this.ended || this.paused || this.waveLive || GameState.wave >= TOTAL_WAVES) {
+    if (this.ended || this.paused || this.waveLive || GameState.wave >= this.totalWaves) {
       AudioBus.playUi('error');
       return;
     }
@@ -596,7 +599,7 @@ export class PlayScene extends Phaser.Scene {
   }
 
   private queueWave(waveNum: number): void {
-    const plan = WAVES[waveNum - 1];
+    const plan = this.mapDef.waves[waveNum - 1];
     if (!plan) return;
     const t0 = this.time.now;
     for (const group of plan) {
@@ -815,7 +818,7 @@ export class PlayScene extends Phaser.Scene {
     if (this.enemies.some((e) => e.alive)) return;
     this.waveLive = false;
     this.refreshHud();
-    if (GameState.wave >= TOTAL_WAVES && GameState.gateHp > 0) {
+    if (GameState.wave >= this.totalWaves && GameState.gateHp > 0) {
       this.win();
     }
   }
@@ -1097,7 +1100,7 @@ export class PlayScene extends Phaser.Scene {
       if (!e.alive) continue;
       const c = Math.floor(e.x / TILE);
       const r = Math.floor(e.y / TILE);
-      if (c === GATE_CELL.c && r === GATE_CELL.r) {
+      if (c === this.mapDef.gate.c && r === this.mapDef.gate.r) {
         e.alive = false;
         e.sprite.destroy();
         e.hpBg.destroy();

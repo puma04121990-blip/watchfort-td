@@ -1,3 +1,5 @@
+export type MapId = 'map01' | 'map02';
+
 export interface GameStateSnapshot {
   coins: number;
   gateHp: number;
@@ -6,6 +8,8 @@ export interface GameStateSnapshot {
   wins: number;
   /** Best star rating for map01 (0–3). */
   map01Stars: number;
+  /** Best star rating for map02 (0–3). */
+  map02Stars: number;
 }
 
 const RUN_COINS = 120;
@@ -18,6 +22,7 @@ const DEFAULT: GameStateSnapshot = {
   wave: 0,
   wins: 0,
   map01Stars: 0,
+  map02Stars: 0,
 };
 
 /** Mutable runtime game state (singleton). */
@@ -28,6 +33,9 @@ class GameStateImpl {
   wave = DEFAULT.wave;
   wins = DEFAULT.wins;
   map01Stars = DEFAULT.map01Stars;
+  map02Stars = DEFAULT.map02Stars;
+  /** Currently selected map for the next / active run (not persisted). */
+  selectedMapId: MapId = 'map01';
 
   resetRun(): void {
     this.coins = RUN_COINS;
@@ -42,6 +50,7 @@ class GameStateImpl {
     this.wave = snapshot.wave;
     this.wins = snapshot.wins;
     this.map01Stars = snapshot.map01Stars;
+    this.map02Stars = snapshot.map02Stars;
   }
 
   snapshot(): GameStateSnapshot {
@@ -52,6 +61,7 @@ class GameStateImpl {
       wave: this.wave,
       wins: this.wins,
       map01Stars: this.map01Stars,
+      map02Stars: this.map02Stars,
     };
   }
 
@@ -70,12 +80,28 @@ class GameStateImpl {
     return this.gateHp <= 0;
   }
 
-  /** Record best stars for map01; returns true if a new best was saved. */
-  recordMap01Stars(stars: number): boolean {
+  bestStars(mapId: string): number {
+    if (mapId === 'map02') return this.map02Stars;
+    return this.map01Stars;
+  }
+
+  /** Record best stars for a map; returns true if a new best was saved. */
+  recordMapStars(mapId: string, stars: number): boolean {
     const clamped = Math.max(0, Math.min(3, Math.floor(stars)));
+    if (mapId === 'map02') {
+      if (clamped <= this.map02Stars) return false;
+      this.map02Stars = clamped;
+      return true;
+    }
     if (clamped <= this.map01Stars) return false;
     this.map01Stars = clamped;
     return true;
+  }
+
+  isMapUnlocked(mapId: string): boolean {
+    if (mapId === 'map01') return true;
+    if (mapId === 'map02') return this.map01Stars >= 1;
+    return false;
   }
 }
 

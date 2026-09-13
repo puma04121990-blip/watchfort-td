@@ -7,7 +7,7 @@ export function hookLevelComplete(stars?: number): void {
   AudioBus.playSfx('complete');
   GameState.wins += 1;
   if (typeof stars === 'number') {
-    GameState.recordMap01Stars(stars);
+    GameState.recordMapStars(GameState.selectedMapId, stars);
   }
   void saveGameState(GameState.snapshot());
 }

@@ -14,6 +14,7 @@ export async function createGame(parent: string | HTMLElement): Promise<Phaser.G
   if (saved) {
     GameState.wins = saved.wins;
     GameState.map01Stars = saved.map01Stars;
+    GameState.map02Stars = saved.map02Stars;
   }
 
   const config: Phaser.Types.Core.GameConfig = {
