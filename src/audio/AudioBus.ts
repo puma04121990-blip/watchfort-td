@@ -69,6 +69,8 @@ let unlocked = false;
 let unlockBound = false;
 let visibilityBound = false;
 let muted = false;
+let musicEnabled = true;
+let sfxEnabled = true;
 let loadPromise: Promise<void> | null = null;
 let loaded = false;
 
@@ -173,7 +175,7 @@ async function unlock(): Promise<void> {
     });
   }
   await loadPromise;
-  if (musicKind && !muted) {
+  if (musicKind && !muted && musicEnabled) {
     startMusic(musicKind, true);
   }
 }
@@ -285,7 +287,7 @@ function stopMusicNode(): void {
 
 function startMusic(kind: MusicClip, immediate = false): void {
   musicKind = kind;
-  if (!unlocked || muted || !loaded) return;
+  if (!unlocked || muted || !musicEnabled || !loaded) return;
   const c = getCtx();
   if (!c || !busNodes) return;
   const id: ClipId = kind === 'menu' ? 'bgm_menu' : 'bgm_play';
@@ -298,7 +300,7 @@ function startMusic(kind: MusicClip, immediate = false): void {
   }
 
   const start = (): void => {
-    if (musicKind !== kind || muted || !unlocked || !busNodes) return;
+    if (musicKind !== kind || muted || !musicEnabled || !unlocked || !busNodes) return;
     const src = c.createBufferSource();
     const g = c.createGain();
     src.buffer = buf;
@@ -327,7 +329,7 @@ function onVisibility(): void {
     stopMusicNode();
   } else {
     muted = false;
-    if (musicKind) startMusic(musicKind, true);
+    if (musicKind && musicEnabled) startMusic(musicKind, true);
   }
 }
 
@@ -351,11 +353,34 @@ export function isAudioUnlocked(): boolean {
 }
 
 export function playUi(clip: UiClip): void {
+  if (!sfxEnabled) return;
   playBuffer(clip, 'ui');
 }
 
 export function playSfx(clip: SfxClip): void {
+  if (!sfxEnabled) return;
   playBuffer(clip, 'sfx');
+}
+
+export function setMusicEnabled(on: boolean): void {
+  musicEnabled = Boolean(on);
+  if (!musicEnabled) {
+    fadeOutMusic(200);
+  } else if (musicKind && !muted && unlocked) {
+    startMusic(musicKind, true);
+  }
+}
+
+export function setSfxEnabled(on: boolean): void {
+  sfxEnabled = Boolean(on);
+}
+
+export function isMusicEnabled(): boolean {
+  return musicEnabled;
+}
+
+export function isSfxEnabled(): boolean {
+  return sfxEnabled;
 }
 
 export function playMusic(kind: MusicClip): void {
@@ -376,6 +401,10 @@ export const AudioBus = {
   playSfx,
   playMusic,
   stopMusic,
+  setMusicEnabled,
+  setSfxEnabled,
+  isMusicEnabled,
+  isSfxEnabled,
   uiClick: (): void => {
     playUi('click');
   },

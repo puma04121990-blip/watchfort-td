@@ -20,6 +20,12 @@ export interface GameStateSnapshot {
   arrowDmgLevel: number;
   /** 0–3: +4 cannon tower damage per level. */
   cannonDmgLevel: number;
+  /** 0–3: +2 frost tower damage per level. */
+  frostDmgLevel: number;
+  /** Music bus enabled (persisted). */
+  musicOn: boolean;
+  /** SFX + UI buses enabled (persisted). */
+  sfxOn: boolean;
 }
 
 const RUN_COINS = 120;
@@ -29,6 +35,7 @@ const MAX_UPGRADE = 3;
 export const START_GOLD_COSTS = [40, 80, 140] as const;
 export const ARROW_DMG_COSTS = [50, 100, 160] as const;
 export const CANNON_DMG_COSTS = [55, 110, 180] as const;
+export const FROST_DMG_COSTS = [45, 90, 150] as const;
 
 const DEFAULT: GameStateSnapshot = {
   coins: RUN_COINS,
@@ -43,6 +50,9 @@ const DEFAULT: GameStateSnapshot = {
   startGoldLevel: 0,
   arrowDmgLevel: 0,
   cannonDmgLevel: 0,
+  frostDmgLevel: 0,
+  musicOn: true,
+  sfxOn: true,
 };
 
 function clampUpgrade(level: number): number {
@@ -63,6 +73,9 @@ class GameStateImpl {
   startGoldLevel = DEFAULT.startGoldLevel;
   arrowDmgLevel = DEFAULT.arrowDmgLevel;
   cannonDmgLevel = DEFAULT.cannonDmgLevel;
+  frostDmgLevel = DEFAULT.frostDmgLevel;
+  musicOn = DEFAULT.musicOn;
+  sfxOn = DEFAULT.sfxOn;
   /** Currently selected map for the next / active run (not persisted). */
   selectedMapId: MapId = 'map01';
 
@@ -85,6 +98,9 @@ class GameStateImpl {
     this.startGoldLevel = clampUpgrade(snapshot.startGoldLevel);
     this.arrowDmgLevel = clampUpgrade(snapshot.arrowDmgLevel);
     this.cannonDmgLevel = clampUpgrade(snapshot.cannonDmgLevel);
+    this.frostDmgLevel = clampUpgrade(snapshot.frostDmgLevel);
+    this.musicOn = snapshot.musicOn !== false;
+    this.sfxOn = snapshot.sfxOn !== false;
   }
 
   snapshot(): GameStateSnapshot {
@@ -101,6 +117,9 @@ class GameStateImpl {
       startGoldLevel: this.startGoldLevel,
       arrowDmgLevel: this.arrowDmgLevel,
       cannonDmgLevel: this.cannonDmgLevel,
+      frostDmgLevel: this.frostDmgLevel,
+      musicOn: this.musicOn,
+      sfxOn: this.sfxOn,
     };
   }
 
@@ -184,6 +203,11 @@ class GameStateImpl {
     return CANNON_DMG_COSTS[this.cannonDmgLevel] ?? null;
   }
 
+  frostDmgNextCost(): number | null {
+    if (this.frostDmgLevel >= MAX_UPGRADE) return null;
+    return FROST_DMG_COSTS[this.frostDmgLevel] ?? null;
+  }
+
   /** Buy one level of startGold; false if maxed or not enough meta. */
   buyStartGold(): boolean {
     const cost = this.startGoldNextCost();
@@ -211,6 +235,15 @@ class GameStateImpl {
     return true;
   }
 
+  /** Buy one level of frostDmg; false if maxed or not enough meta. */
+  buyFrostDmg(): boolean {
+    const cost = this.frostDmgNextCost();
+    if (cost === null || this.metaGold < cost) return false;
+    this.metaGold -= cost;
+    this.frostDmgLevel += 1;
+    return true;
+  }
+
   /** Effective arrow damage bonus from meta upgrade. */
   arrowDamageBonus(): number {
     return this.arrowDmgLevel * 3;
@@ -219,6 +252,11 @@ class GameStateImpl {
   /** Effective cannon damage bonus from meta upgrade. */
   cannonDamageBonus(): number {
     return this.cannonDmgLevel * 4;
+  }
+
+  /** Effective frost damage bonus from meta upgrade. */
+  frostDamageBonus(): number {
+    return this.frostDmgLevel * 2;
   }
 }
 

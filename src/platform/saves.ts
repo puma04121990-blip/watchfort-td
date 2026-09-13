@@ -27,6 +27,9 @@ export async function loadGameState(): Promise<GameStateSnapshot | null> {
     startGoldLevel: num(s.startGoldLevel, 0),
     arrowDmgLevel: num(s.arrowDmgLevel, 0),
     cannonDmgLevel: num(s.cannonDmgLevel, 0),
+    frostDmgLevel: num(s.frostDmgLevel, 0),
+    musicOn: s.musicOn !== false,
+    sfxOn: s.sfxOn !== false,
   };
 }
 

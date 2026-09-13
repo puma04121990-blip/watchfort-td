@@ -133,12 +133,14 @@ export class MenuScene extends Phaser.Scene {
 
     this.buildShop(width, height);
 
+    this.buildAudioToggles(width, height);
+
     const playBtn = this.add
-      .image(width / 2, height * 0.78, 'btn_play')
+      .image(width / 2, height * 0.8, 'btn_play')
       .setInteractive({ useHandCursor: true });
 
     const playLabel = this.add
-      .text(width / 2, height * 0.78, t('menu.play'), {
+      .text(width / 2, height * 0.8, t('menu.play'), {
         fontFamily: 'system-ui, sans-serif',
         fontSize: '22px',
         color: '#F3F4F6',
@@ -164,7 +166,7 @@ export class MenuScene extends Phaser.Scene {
     playLabel.setInteractive({ useHandCursor: true }).on('pointerdown', start);
 
     const locLabel = this.add
-      .text(width / 2, height * 0.9, getLocale() === 'ru' ? 'RU | en' : 'ru | EN', {
+      .text(width / 2, height * 0.915, getLocale() === 'ru' ? 'RU | en' : 'ru | EN', {
         fontFamily: 'system-ui, sans-serif',
         fontSize: '14px',
         color: '#22D3EE',
@@ -180,8 +182,8 @@ export class MenuScene extends Phaser.Scene {
   }
 
   private buildShop(width: number, height: number): void {
-    const shopY0 = height * 0.48;
-    const rowH = 36;
+    const shopY0 = height * 0.46;
+    const rowH = 32;
     const rows: Array<{
       labelKey: string;
       level: number;
@@ -205,6 +207,12 @@ export class MenuScene extends Phaser.Scene {
         level: GameState.cannonDmgLevel,
         cost: GameState.cannonDmgNextCost(),
         buy: () => GameState.buyCannonDmg(),
+      },
+      {
+        labelKey: 'menu.upFrostDmg',
+        level: GameState.frostDmgLevel,
+        cost: GameState.frostDmgNextCost(),
+        buy: () => GameState.buyFrostDmg(),
       },
     ];
 
@@ -246,6 +254,42 @@ export class MenuScene extends Phaser.Scene {
         void saveGameState(GameState.snapshot());
         this.scene.restart();
       });
+    });
+  }
+  private buildAudioToggles(width: number, height: number): void {
+    const y = height * 0.705;
+    const musicLabel = this.add
+      .text(width / 2 - 90, y, GameState.musicOn ? t('menu.musicOn') : t('menu.musicOff'), {
+        fontFamily: 'system-ui, sans-serif',
+        fontSize: '14px',
+        color: '#22D3EE',
+      })
+      .setOrigin(0.5)
+      .setInteractive({ useHandCursor: true });
+
+    musicLabel.on('pointerdown', () => {
+      GameState.musicOn = !GameState.musicOn;
+      AudioBus.setMusicEnabled(GameState.musicOn);
+      void saveGameState(GameState.snapshot());
+      if (GameState.sfxOn) AudioBus.playUi('click');
+      this.scene.restart();
+    });
+
+    const sfxLabel = this.add
+      .text(width / 2 + 90, y, GameState.sfxOn ? t('menu.sfxOn') : t('menu.sfxOff'), {
+        fontFamily: 'system-ui, sans-serif',
+        fontSize: '14px',
+        color: '#22D3EE',
+      })
+      .setOrigin(0.5)
+      .setInteractive({ useHandCursor: true });
+
+    sfxLabel.on('pointerdown', () => {
+      GameState.sfxOn = !GameState.sfxOn;
+      AudioBus.setSfxEnabled(GameState.sfxOn);
+      void saveGameState(GameState.snapshot());
+      if (GameState.sfxOn) AudioBus.playUi('click');
+      this.scene.restart();
     });
   }
 }

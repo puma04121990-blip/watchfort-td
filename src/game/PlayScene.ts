@@ -643,6 +643,8 @@ export class PlayScene extends Phaser.Scene {
       def.damage += GameState.arrowDamageBonus();
     } else if (this.selected === 'cannon') {
       def.damage += GameState.cannonDamageBonus();
+    } else if (this.selected === 'frost') {
+      def.damage += GameState.frostDamageBonus();
     }
     const { x, y } = cellCenter(c, r);
     const sprite = this.add.image(x, y, def.texture).setDisplaySize(52, 52).setDepth(5);
