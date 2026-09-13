@@ -1,6 +1,6 @@
 /**
- * Silent until first pointerdown. Buses: music / sfx / ui.
- * Mute-all on document visibility hide.
+ * Buffer-based buses: music / sfx / ui.
+ * Silent until first pointerdown/touch/keydown. Mute-all on tab hide.
  */
 
 export type AudioBusId = 'music' | 'sfx' | 'ui';
@@ -19,20 +19,69 @@ export type SfxClip =
   | 'start';
 export type MusicClip = 'menu' | 'play';
 
+type ClipId = UiClip | SfxClip | 'bgm_menu' | 'bgm_play';
+
+const FILE_STEM: Record<ClipId, string> = {
+  click: 'click',
+  confirm: 'confirm',
+  error: 'error',
+  place: 'place',
+  shot_arrow: 'shot_arrow',
+  shot_cannon: 'shot_cannon',
+  shot_frost: 'shot_frost',
+  hit: 'hit',
+  die: 'die',
+  coin: 'coin',
+  gate: 'gate',
+  complete: 'complete',
+  fail: 'fail',
+  start: 'start',
+  bgm_menu: 'bgm_menu',
+  bgm_play: 'bgm_play',
+};
+
+const BUS_GAIN: Record<AudioBusId, number> = {
+  music: 0.22,
+  sfx: 0.55,
+  ui: 0.42,
+};
+
+const COOLDOWN_MS: Partial<Record<ClipId, number>> = {
+  shot_arrow: 40,
+  shot_cannon: 80,
+  shot_frost: 60,
+  hit: 35,
+  coin: 50,
+  click: 30,
+};
+
+const POLY_LIMIT: Partial<Record<ClipId, number>> = {
+  shot_arrow: 4,
+  shot_cannon: 3,
+  shot_frost: 3,
+  hit: 5,
+  coin: 4,
+  die: 3,
+};
+
 let ctx: AudioContext | null = null;
 let unlocked = false;
 let unlockBound = false;
 let visibilityBound = false;
 let muted = false;
-let musicTimer: number | null = null;
-let musicKind: MusicClip | null = null;
-let musicStep = 0;
+let loadPromise: Promise<void> | null = null;
+let loaded = false;
 
-const BUS_GAIN: Record<AudioBusId, number> = {
-  music: 0.028,
-  sfx: 0.055,
-  ui: 0.045,
-};
+const buffers = new Map<ClipId, AudioBuffer>();
+const lastPlay = new Map<ClipId, number>();
+const activeCount = new Map<ClipId, number>();
+
+let masterGain: GainNode | null = null;
+let busNodes: Record<AudioBusId, GainNode> | null = null;
+
+let musicKind: MusicClip | null = null;
+let musicSource: AudioBufferSourceNode | null = null;
+let musicGain: GainNode | null = null;
 
 function getCtx(): AudioContext | null {
   if (typeof window === 'undefined') return null;
@@ -46,6 +95,66 @@ function getCtx(): AudioContext | null {
   return ctx;
 }
 
+function ensureGraph(c: AudioContext): void {
+  if (masterGain && busNodes) return;
+  masterGain = c.createGain();
+  masterGain.gain.value = 1;
+  masterGain.connect(c.destination);
+  busNodes = {
+    music: c.createGain(),
+    sfx: c.createGain(),
+    ui: c.createGain(),
+  };
+  (Object.keys(BUS_GAIN) as AudioBusId[]).forEach((id) => {
+    const g = busNodes![id];
+    g.gain.value = BUS_GAIN[id];
+    g.connect(masterGain!);
+  });
+}
+
+function audioUrl(stem: string, ext: 'ogg' | 'm4a'): string {
+  return new URL(`../../assets/audio/${stem}.${ext}`, import.meta.url).href;
+}
+
+async function decodeStem(c: AudioContext, stem: string): Promise<AudioBuffer | null> {
+  for (const ext of ['ogg', 'm4a'] as const) {
+    try {
+      const res = await fetch(audioUrl(stem, ext));
+      if (!res.ok) continue;
+      const arr = await res.arrayBuffer();
+      return await c.decodeAudioData(arr.slice(0));
+    } catch {
+      // try next format
+    }
+  }
+  // Vite public path fallback (Pages / dev)
+  for (const ext of ['ogg', 'm4a'] as const) {
+    try {
+      const res = await fetch(`./assets/audio/${stem}.${ext}`);
+      if (!res.ok) continue;
+      const arr = await res.arrayBuffer();
+      return await c.decodeAudioData(arr.slice(0));
+    } catch {
+      // continue
+    }
+  }
+  return null;
+}
+
+async function loadAll(): Promise<void> {
+  const c = getCtx();
+  if (!c) return;
+  ensureGraph(c);
+  const entries = Object.entries(FILE_STEM) as [ClipId, string][];
+  await Promise.all(
+    entries.map(async ([id, stem]) => {
+      const buf = await decodeStem(c, stem);
+      if (buf) buffers.set(id, buf);
+    }),
+  );
+  loaded = true;
+}
+
 async function unlock(): Promise<void> {
   const c = getCtx();
   if (!c) return;
@@ -57,8 +166,15 @@ async function unlock(): Promise<void> {
     }
   }
   unlocked = true;
+  ensureGraph(c);
+  if (!loadPromise) {
+    loadPromise = loadAll().catch(() => {
+      /* silent */
+    });
+  }
+  await loadPromise;
   if (musicKind && !muted) {
-    startMusicTimer(musicKind);
+    startMusic(musicKind, true);
   }
 }
 
@@ -66,65 +182,152 @@ function onFirstPointer(): void {
   void unlock();
 }
 
-function beep(
-  freq: number,
-  dur: number,
-  type: OscillatorType,
-  bus: AudioBusId,
-  volScale = 1,
-): void {
-  if (!unlocked || muted) return;
-  const c = getCtx();
-  if (!c || c.state !== 'running') return;
-
-  const osc = c.createOscillator();
-  const gain = c.createGain();
-  osc.type = type;
-  osc.frequency.value = freq;
-  const vol = BUS_GAIN[bus] * volScale;
-  const now = c.currentTime;
-  gain.gain.setValueAtTime(vol, now);
-  gain.gain.exponentialRampToValueAtTime(0.001, now + dur);
-  osc.connect(gain);
-  gain.connect(c.destination);
-  osc.start(now);
-  osc.stop(now + dur + 0.02);
+function nowMs(): number {
+  return typeof performance !== 'undefined' ? performance.now() : Date.now();
 }
 
-function stopMusicTimer(): void {
-  if (musicTimer !== null) {
-    window.clearInterval(musicTimer);
-    musicTimer = null;
+function canPlay(id: ClipId): boolean {
+  const cd = COOLDOWN_MS[id];
+  if (cd) {
+    const last = lastPlay.get(id) ?? 0;
+    if (nowMs() - last < cd) return false;
   }
+  const lim = POLY_LIMIT[id];
+  if (lim !== undefined && (activeCount.get(id) ?? 0) >= lim) return false;
+  return true;
 }
 
-const MENU_NOTES = [196, 247, 294, 247, 220, 196, 165, 196];
-const PLAY_NOTES = [262, 330, 392, 330, 294, 392, 349, 330];
+function playBuffer(id: ClipId, bus: AudioBusId, opts?: { loop?: boolean }): AudioBufferSourceNode | null {
+  if (!unlocked || muted) return null;
+  const c = getCtx();
+  if (!c || c.state !== 'running' || !busNodes) return null;
+  const buf = buffers.get(id);
+  if (!buf) return null;
+  if (!opts?.loop && !canPlay(id)) return null;
 
-function startMusicTimer(kind: MusicClip): void {
-  stopMusicTimer();
-  musicKind = kind;
-  musicStep = 0;
-  if (!unlocked || muted) return;
-  const notes = kind === 'menu' ? MENU_NOTES : PLAY_NOTES;
-  const interval = kind === 'menu' ? 380 : 300;
-  const tick = (): void => {
-    if (!unlocked || muted || musicKind !== kind) return;
-    const freq = notes[musicStep % notes.length] ?? 220;
-    beep(freq, kind === 'menu' ? 0.22 : 0.16, 'triangle', 'music', 1);
-    musicStep += 1;
+  const src = c.createBufferSource();
+  src.buffer = buf;
+  src.loop = Boolean(opts?.loop);
+  src.connect(busNodes[bus]);
+  activeCount.set(id, (activeCount.get(id) ?? 0) + 1);
+  lastPlay.set(id, nowMs());
+  src.onended = () => {
+    activeCount.set(id, Math.max(0, (activeCount.get(id) ?? 1) - 1));
   };
-  tick();
-  musicTimer = window.setInterval(tick, interval);
+  try {
+    src.start(0);
+  } catch {
+    activeCount.set(id, Math.max(0, (activeCount.get(id) ?? 1) - 1));
+    return null;
+  }
+  return src;
+}
+
+function fadeOutMusic(ms: number): void {
+  const c = getCtx();
+  if (!c || !musicGain || !musicSource) {
+    stopMusicNode();
+    return;
+  }
+  const g = musicGain;
+  const src = musicSource;
+  const t = c.currentTime;
+  const dur = Math.max(0.05, ms / 1000);
+  try {
+    g.gain.cancelScheduledValues(t);
+    g.gain.setValueAtTime(g.gain.value, t);
+    g.gain.linearRampToValueAtTime(0.0001, t + dur);
+  } catch {
+    /* ignore */
+  }
+  window.setTimeout(() => {
+    try {
+      src.stop();
+    } catch {
+      /* ignore */
+    }
+    try {
+      src.disconnect();
+      g.disconnect();
+    } catch {
+      /* ignore */
+    }
+    if (musicSource === src) {
+      musicSource = null;
+      musicGain = null;
+    }
+  }, ms + 30);
+}
+
+function stopMusicNode(): void {
+  if (musicSource) {
+    try {
+      musicSource.stop();
+    } catch {
+      /* ignore */
+    }
+    try {
+      musicSource.disconnect();
+    } catch {
+      /* ignore */
+    }
+  }
+  if (musicGain) {
+    try {
+      musicGain.disconnect();
+    } catch {
+      /* ignore */
+    }
+  }
+  musicSource = null;
+  musicGain = null;
+}
+
+function startMusic(kind: MusicClip, immediate = false): void {
+  musicKind = kind;
+  if (!unlocked || muted || !loaded) return;
+  const c = getCtx();
+  if (!c || !busNodes) return;
+  const id: ClipId = kind === 'menu' ? 'bgm_menu' : 'bgm_play';
+  const buf = buffers.get(id);
+  if (!buf) return;
+
+  if (musicSource) {
+    if (!immediate) fadeOutMusic(280);
+    else stopMusicNode();
+  }
+
+  const start = (): void => {
+    if (musicKind !== kind || muted || !unlocked || !busNodes) return;
+    const src = c.createBufferSource();
+    const g = c.createGain();
+    src.buffer = buf;
+    src.loop = true;
+    g.gain.value = 0.0001;
+    src.connect(g);
+    g.connect(busNodes.music);
+    const t = c.currentTime;
+    g.gain.linearRampToValueAtTime(1, t + 0.25);
+    try {
+      src.start(0);
+    } catch {
+      return;
+    }
+    musicSource = src;
+    musicGain = g;
+  };
+
+  if (immediate || !musicSource) start();
+  else window.setTimeout(start, 300);
 }
 
 function onVisibility(): void {
   if (document.hidden) {
     muted = true;
-    stopMusicTimer();
+    stopMusicNode();
   } else {
     muted = false;
-    if (musicKind) startMusicTimer(musicKind);
+    if (musicKind) startMusic(musicKind, true);
   }
 }
 
@@ -148,72 +351,21 @@ export function isAudioUnlocked(): boolean {
 }
 
 export function playUi(clip: UiClip): void {
-  switch (clip) {
-    case 'click':
-      beep(660, 0.08, 'square', 'ui');
-      break;
-    case 'confirm':
-      beep(520, 0.07, 'square', 'ui');
-      beep(780, 0.1, 'square', 'ui', 0.8);
-      break;
-    case 'error':
-      beep(180, 0.14, 'sawtooth', 'ui', 1.1);
-      break;
-  }
+  playBuffer(clip, 'ui');
 }
 
 export function playSfx(clip: SfxClip): void {
-  switch (clip) {
-    case 'place':
-      beep(300, 0.08, 'triangle', 'sfx');
-      beep(440, 0.1, 'square', 'sfx', 0.7);
-      break;
-    case 'shot_arrow':
-      beep(880, 0.05, 'square', 'sfx', 0.7);
-      break;
-    case 'shot_cannon':
-      beep(140, 0.14, 'sawtooth', 'sfx', 1.2);
-      break;
-    case 'shot_frost':
-      beep(980, 0.09, 'sine', 'sfx', 0.8);
-      break;
-    case 'hit':
-      beep(220, 0.06, 'square', 'sfx', 0.6);
-      break;
-    case 'die':
-      beep(160, 0.16, 'triangle', 'sfx');
-      break;
-    case 'coin':
-      beep(880, 0.07, 'square', 'sfx', 0.7);
-      beep(1180, 0.09, 'square', 'sfx', 0.5);
-      break;
-    case 'gate':
-      beep(90, 0.2, 'sawtooth', 'sfx', 1.3);
-      break;
-    case 'complete':
-      beep(392, 0.12, 'triangle', 'sfx');
-      beep(523, 0.14, 'triangle', 'sfx');
-      beep(659, 0.22, 'triangle', 'sfx');
-      break;
-    case 'fail':
-      beep(196, 0.18, 'sawtooth', 'sfx');
-      beep(147, 0.28, 'sawtooth', 'sfx', 1.1);
-      break;
-    case 'start':
-      beep(330, 0.08, 'square', 'sfx');
-      beep(494, 0.12, 'square', 'sfx', 0.8);
-      break;
-  }
+  playBuffer(clip, 'sfx');
 }
 
 export function playMusic(kind: MusicClip): void {
-  if (musicKind === kind && musicTimer !== null) return;
-  startMusicTimer(kind);
+  if (musicKind === kind && musicSource) return;
+  startMusic(kind);
 }
 
 export function stopMusic(): void {
   musicKind = null;
-  stopMusicTimer();
+  fadeOutMusic(200);
 }
 
 export const AudioBus = {

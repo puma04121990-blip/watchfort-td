@@ -3,14 +3,19 @@
   "version": "1.0.0",
   "private": true,
   "type": "module",
-  "description": "Watchfort — stylized casual tower defense (Phaser 4 + Vite + TypeScript + GamePush)",
+  "description": "Watchfort \u2014 stylized casual tower defense (Phaser 4 + Vite + TypeScript + GamePush)",
   "scripts": {
     "dev": "vite",
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview",
-    "gen:assets": "node scripts/gen-assets.mjs"
+    "gen:assets": "node scripts/gen-assets.mjs",
+    "gen:sfx": "python3 scripts/gen-sfx.py"
   },
-  "keywords": ["phaser", "tower-defense", "gamepush"],
+  "keywords": [
+    "phaser",
+    "tower-defense",
+    "gamepush"
+  ],
   "license": "MIT",
   "dependencies": {
     "phaser": "4.2.1"
