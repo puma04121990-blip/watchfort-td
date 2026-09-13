@@ -34,6 +34,7 @@ interface EnemyActor {
   id: number;
   kind: EnemyKind;
   sprite: Phaser.GameObjects.Image;
+  shadow: Phaser.GameObjects.Ellipse;
   hpBg: Phaser.GameObjects.Rectangle;
   hpFg: Phaser.GameObjects.Rectangle;
   hp: number;
@@ -50,6 +51,7 @@ interface EnemyActor {
 
 interface SoldierActor {
   sprite: Phaser.GameObjects.Image;
+  shadow: Phaser.GameObjects.Ellipse;
   hpBg: Phaser.GameObjects.Rectangle;
   hpFg: Phaser.GameObjects.Rectangle;
   hp: number;
@@ -70,6 +72,7 @@ interface TowerActor {
   level: number;
   totalSpent: number;
   sprite: Phaser.GameObjects.Image;
+  shadow: Phaser.GameObjects.Ellipse;
   starMark: Phaser.GameObjects.Text | null;
   lastShot: number;
   soldier: SoldierActor | null;
@@ -150,6 +153,21 @@ function enemyMeleeDamage(kind: EnemyKind): number {
     case 'brute':
       return 18;
   }
+}
+
+
+/** Soft elliptical contact shadow (Pixar-appeal ground contact). */
+function contactShadow(
+  scene: Phaser.Scene,
+  x: number,
+  y: number,
+  width: number,
+  height: number,
+  depth: number,
+): Phaser.GameObjects.Ellipse {
+  return scene.add
+    .ellipse(x, y, width, height, 0x000000, 0.25)
+    .setDepth(depth);
 }
 
 function enemySpriteSize(kind: EnemyKind): number {
@@ -800,6 +818,7 @@ export class PlayScene extends Phaser.Scene {
     this.occupied.delete(key);
     this.destroySoldier(tw);
     tw.sprite.destroy();
+    tw.shadow.destroy();
     tw.starMark?.destroy();
     this.towers = this.towers.filter((t) => t !== tw);
     this.clearTowerSelection();
@@ -836,6 +855,7 @@ export class PlayScene extends Phaser.Scene {
       def.damage += GameState.frostDamageBonus();
     }
     const { x, y } = cellCenter(c, r);
+    const shadow = contactShadow(this, x, y + 22, 40, 14, 4);
     const sprite = this.add.image(x, y, def.texture).setDisplaySize(52, 52).setDepth(5);
     const tw: TowerActor = {
       col: c,
@@ -846,6 +866,7 @@ export class PlayScene extends Phaser.Scene {
       level: 1,
       totalSpent: base.cost,
       sprite,
+      shadow,
       starMark: null,
       lastShot: 0,
       soldier: null,
@@ -905,8 +926,9 @@ export class PlayScene extends Phaser.Scene {
     const def = ENEMIES[kind];
     const start = this.waypoints[0];
     if (!start) return;
-    const sprite = this.add.image(start.x, start.y, def.texture).setDepth(8);
     const sz = enemySpriteSize(kind);
+    const shadow = contactShadow(this, start.x, start.y + sz * 0.38, sz * 0.72, sz * 0.28, 6);
+    const sprite = this.add.image(start.x, start.y, def.texture).setDepth(8);
     sprite.setDisplaySize(sz, sz);
     const hpBg = this.add.rectangle(start.x, start.y - 22, 28, 4, COLOR.shade).setDepth(11);
     const hpFg = this.add.rectangle(start.x, start.y - 22, 28, 4, COLOR.gold).setDepth(12);
@@ -916,6 +938,7 @@ export class PlayScene extends Phaser.Scene {
       id: this.nextId++,
       kind,
       sprite,
+      shadow,
       hpBg,
       hpFg,
       hp,
@@ -960,6 +983,8 @@ export class PlayScene extends Phaser.Scene {
         }
       }
       e.sprite.setPosition(e.x, e.y);
+      const esz = enemySpriteSize(e.kind);
+      e.shadow.setPosition(e.x, e.y + esz * 0.38);
       e.hpBg.setPosition(e.x, e.y - 22);
       e.hpFg.setPosition(e.x, e.y - 22);
       e.hpFg.width = Math.max(1, 28 * (e.hp / e.maxHp));
@@ -973,6 +998,7 @@ export class PlayScene extends Phaser.Scene {
   private leak(e: EnemyActor): void {
     e.alive = false;
     e.sprite.destroy();
+    e.shadow.destroy();
     e.hpBg.destroy();
     e.hpFg.destroy();
     AudioBus.playSfx('gate');
@@ -1029,11 +1055,13 @@ export class PlayScene extends Phaser.Scene {
     if (!cell) return;
     const { x, y } = cellCenter(cell.c, cell.r);
     const hp = Math.max(1, tw.def.soldierHp);
+    const shadow = contactShadow(this, x, y + 12, 26, 10, 6);
     const sprite = this.add.image(x, y, 'unit_soldier').setDisplaySize(32, 32).setDepth(7);
     const hpBg = this.add.rectangle(x, y - 20, 24, 4, COLOR.shade).setDepth(11);
     const hpFg = this.add.rectangle(x, y - 20, 24, 4, COLOR.barracks).setDepth(12);
     tw.soldier = {
       sprite,
+      shadow,
       hpBg,
       hpFg,
       hp,
@@ -1051,6 +1079,7 @@ export class PlayScene extends Phaser.Scene {
     if (!s) return;
     s.alive = false;
     s.sprite.destroy();
+    s.shadow.destroy();
     s.hpBg.destroy();
     s.hpFg.destroy();
     tw.soldier = null;
@@ -1250,6 +1279,7 @@ export class PlayScene extends Phaser.Scene {
     if (e.hp <= 0) {
       e.alive = false;
       e.sprite.destroy();
+      e.shadow.destroy();
       e.hpBg.destroy();
       e.hpFg.destroy();
       this.runKills += 1;
@@ -1801,6 +1831,7 @@ export class PlayScene extends Phaser.Scene {
       if (c === this.mapDef.gate.c && r === this.mapDef.gate.r) {
         e.alive = false;
         e.sprite.destroy();
+        e.shadow.destroy();
         e.hpBg.destroy();
         e.hpFg.destroy();
       }

@@ -12,7 +12,9 @@ export class MenuScene extends Phaser.Scene {
 
   create(): void {
     const { width, height } = this.scale;
-    this.cameras.main.setBackgroundColor(`#${COLOR.panel.toString(16).padStart(6, '0')}`);
+    // Slightly warmer clear than raw panel gray
+    const warmClear = 0x1a1624;
+    this.cameras.main.setBackgroundColor(`#${warmClear.toString(16).padStart(6, '0')}`);
     AudioBus.playMusic('menu');
 
     if (!GameState.isMapUnlocked(GameState.selectedMapId)) {
@@ -22,22 +24,38 @@ export class MenuScene extends Phaser.Scene {
       GameState.difficulty = 'normal';
     }
 
-    this.add.rectangle(width / 2, height / 2, width, height, COLOR.panel);
+    this.add.rectangle(width / 2, height / 2, width, height, warmClear);
+
+    // Soft vignette (corners darker) — drawn under panel/UI
+    const vig = this.add.graphics();
+    vig.fillStyle(0x0a0810, 0.35);
+    vig.fillEllipse(width * 0.12, height * 0.1, width * 0.55, height * 0.45);
+    vig.fillEllipse(width * 0.88, height * 0.1, width * 0.55, height * 0.45);
+    vig.fillEllipse(width * 0.12, height * 0.92, width * 0.55, height * 0.5);
+    vig.fillEllipse(width * 0.88, height * 0.92, width * 0.55, height * 0.5);
+
+    // Rounded-feel panel: thicker gold stroke + inner shade bands
+    const pw = width * 0.82;
+    const ph = height * 0.86;
     this.add
-      .rectangle(width / 2, height / 2, width * 0.82, height * 0.86, COLOR.shade, 0.96)
-      .setStrokeStyle(2, COLOR.gold);
+      .rectangle(width / 2, height / 2, pw, ph, COLOR.shade, 0.96)
+      .setStrokeStyle(4, COLOR.gold);
+    this.add
+      .rectangle(width / 2, height / 2, pw - 14, ph - 14, 0x162032, 0.55)
+      .setStrokeStyle(2, 0xc9a227);
+    this.add.rectangle(width / 2, height / 2, pw - 28, ph - 28, COLOR.shade, 0.35);
 
     this.add
-      .text(width / 2, height * 0.1, t('menu.title'), {
+      .text(width / 2, height * 0.088, t('menu.title'), {
         fontFamily: 'system-ui, sans-serif',
-        fontSize: '32px',
+        fontSize: '34px',
         color: '#F3F4F6',
         fontStyle: 'bold',
       })
       .setOrigin(0.5);
 
     this.add
-      .text(width / 2, height * 0.155, t('menu.subtitle'), {
+      .text(width / 2, height * 0.148, t('menu.subtitle'), {
         fontFamily: 'system-ui, sans-serif',
         fontSize: '14px',
         color: '#E8B84A',
@@ -45,7 +63,7 @@ export class MenuScene extends Phaser.Scene {
       .setOrigin(0.5);
 
     this.add
-      .text(width / 2, height * 0.2, t('menu.metaGold', { n: GameState.metaGold }), {
+      .text(width / 2, height * 0.198, t('menu.metaGold', { n: GameState.metaGold }), {
         fontFamily: 'system-ui, sans-serif',
         fontSize: '16px',
         color: '#E8B84A',

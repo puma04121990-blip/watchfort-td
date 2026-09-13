@@ -1,30 +1,42 @@
-# Watchfort — Art bible v0.1
+# Watchfort — Art bible (Pixar-appeal 2D)
 
-## Три столпа
-1. **Читаемый path** — дорога контрастнее поля, враг силуэтом на 5"  
-2. **Башня = роль цветом** — синий/оранжевый/бирюза/зелёный, без путаницы  
-3. **Лёгкий героический casual** — не хоррор, не ультра-милый farm  
+## Столпы / Pillars
+1. **Appealing rounded silhouettes** — soft, readable shapes; no harsh pixels, no flat gray boxes  
+2. **Soft top-left light + warm bounce fill** — volume via gradients; specular highlight blob top-left; subtle rim light  
+3. **Clear color roles** — tower = role by hue (blue / orange / cyan / green); enemy threat marker stays red family  
+4. **Contact shadows** — soft elliptical ground contact under towers, enemies, soldiers  
+5. **Читаемый path** — sandy path with edge darkening vs soft grass tufts  
+
+**NOT 3D CGI** — soft stylized **2D** (Kingdom-Rush-adjacent genre energy, Pixar *appeal* not render). Transparent backgrounds on all sprites.
 
 ## Камера / масштаб
-Top-down. Тайл логики `64×64` (или `48×48` на мобилке — старт **64**). Башня спрайт ~56–64 px в клетке. Враг ~32–48 px.
+Top-down. Logic tile `64×64`. Tower sprite ~56–64 px in cell. Enemy ~32–48 px. Keep gameplay sizes identical when regenerating art.
 
 ## Палитра — см. `palette_swatch.png`
-14 цветов. Новый оттенок только с ролью.
+14+ role colors. New tint only with a job (accent / light / dark of an existing role).
 
 ## Линия / свет
-Мягкий контур 1–2 px `#1F2933`. Свет сверху-слева. Без фототекстур.
+- Soft AA via supersample (2–4× draw → LANCZOS downscale)  
+- Light from **top-left**; warm bounce from bottom-right  
+- Specular highlight blob; subtle rim on opposite edge  
+- Soft contour via shade in gradient — avoid hard 1px pixel outlines  
 
 ## Бюджет
 | Класс | Правило |
 |---|---|
-| Tower | силуэт + ствол/дуло читаются в idle |
-| Enemy | один маркер угрозы `#D64545` |
-| Tile path/grass | бесшовные, 2–3 тона |
-| UI кнопки | normal/pressed/disabled, палец ≥44 CSS px |
-| VFX shot/hit | 4–6 кадров, цвет башни |
+| Tower | Rounded base, glossy barrel, friendly not military-grim; silhouette + role color readable in idle |
+| Enemy | Cute proportions (big head/eyes for runner/swarm; tank chunky; brute imposing but cartoony); one threat hue family |
+| Tile path/grass | Soft grass tufts; sandy path with edge darkening; seamless-ish 2–4 tones |
+| Gate | Warm wood + gold frame, inviting |
+| UI btn_play | Plump rounded CTA with gloss |
+| Projectiles / FX | Soft glow blobs, tower-tinted |
+| Contact shadow | Ellipse under units/towers, fill alpha ~0.25 |
 
 ## Вне границ
-Пиксель-арт (пока), изометрия, реалистичная кровь, чужой IP (Kingdom Rush копировать нельзя — только жанр).
+True pixel-art crunch, isometric, photoreal / 3D CGI, realistic blood, чужой IP (Kingdom Rush — жанр ок, копировать ассеты нельзя).
+
+## Генератор
+`pnpm gen:assets` → `scripts/gen-assets-pixar.py` (Pillow). Outputs `assets/` + `public/assets/`.
 
 ## Имена
-`tower_arrow_idle` · `tower_arrow_fire_00` · `enemy_runner_walk_00` · `tile_path` · `tile_grass` · `ui_btn_wave` · `fx_shot_arrow`
+`tower_arrow` · `tower_cannon` · `tower_frost` · `tower_barracks` · `enemy_runner` · `enemy_tank` · `enemy_brute` · `enemy_swarm` · `unit_soldier` · `tile_path` · `tile_grass` · `tile_gate` · `btn_play` · `fx_hit` · `projectile_*` · `ui_coin`
