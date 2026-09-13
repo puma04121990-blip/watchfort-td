@@ -16,6 +16,7 @@ export async function createGame(parent: string | HTMLElement): Promise<Phaser.G
     GameState.map01Stars = saved.map01Stars;
     GameState.map02Stars = saved.map02Stars;
     GameState.map03Stars = saved.map03Stars;
+    GameState.map04Stars = saved.map04Stars;
     GameState.metaGold = Math.max(0, saved.metaGold);
     GameState.startGoldLevel = Math.max(0, Math.min(3, Math.floor(saved.startGoldLevel)));
     GameState.arrowDmgLevel = Math.max(0, Math.min(3, Math.floor(saved.arrowDmgLevel)));

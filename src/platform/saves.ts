@@ -23,6 +23,7 @@ export async function loadGameState(): Promise<GameStateSnapshot | null> {
     map01Stars: num(s.map01Stars, 0),
     map02Stars: num(s.map02Stars, 0),
     map03Stars: num(s.map03Stars, 0),
+    map04Stars: num(s.map04Stars, 0),
     metaGold: num(s.metaGold, 0),
     startGoldLevel: num(s.startGoldLevel, 0),
     arrowDmgLevel: num(s.arrowDmgLevel, 0),

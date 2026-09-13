@@ -297,6 +297,67 @@ const WAVES_MAP03: WaveSpawn[][] = [
   ],
 ];
 
+
+/** East spawn → trench ditches → south-west gate (not map01–03). */
+const PATH_MAP04: Cell[] = [
+  { c: 11, r: 3 },
+  { c: 10, r: 3 },
+  { c: 9, r: 3 },
+  { c: 8, r: 3 },
+  { c: 8, r: 4 },
+  { c: 8, r: 5 },
+  { c: 8, r: 6 },
+  { c: 7, r: 6 },
+  { c: 6, r: 6 },
+  { c: 5, r: 6 },
+  { c: 5, r: 5 },
+  { c: 5, r: 4 },
+  { c: 5, r: 3 },
+  { c: 5, r: 2 },
+  { c: 4, r: 2 },
+  { c: 3, r: 2 },
+  { c: 2, r: 2 },
+  { c: 2, r: 3 },
+  { c: 2, r: 4 },
+  { c: 2, r: 5 },
+  { c: 2, r: 6 },
+  { c: 2, r: 7 },
+  { c: 3, r: 7 },
+  { c: 4, r: 7 },
+  { c: 5, r: 7 },
+  { c: 6, r: 7 },
+  { c: 7, r: 7 },
+  { c: 7, r: 8 },
+  { c: 7, r: 9 },
+  { c: 6, r: 9 },
+  { c: 5, r: 9 },
+  { c: 4, r: 9 },
+  { c: 3, r: 9 },
+  { c: 2, r: 9 },
+  { c: 1, r: 9 },
+  { c: 0, r: 9 },
+];
+
+/** Denser than map03: more swarm + tanks; brute only on last wave. */
+const WAVES_MAP04: WaveSpawn[][] = [
+  [
+    { kind: 'runner', count: 12, interval: 550, delay: 200 },
+    { kind: 'swarm', count: 16, interval: 220, delay: 300 },
+    { kind: 'tank', count: 5, interval: 1200, delay: 1800 },
+  ],
+  [
+    { kind: 'runner', count: 12, interval: 480, delay: 200 },
+    { kind: 'swarm', count: 20, interval: 180, delay: 250 },
+    { kind: 'tank', count: 8, interval: 900, delay: 1000 },
+  ],
+  [
+    { kind: 'swarm', count: 24, interval: 150, delay: 100 },
+    { kind: 'runner', count: 14, interval: 400, delay: 200 },
+    { kind: 'tank', count: 10, interval: 750, delay: 800 },
+    { kind: 'brute', count: 5, interval: 1400, delay: 2800 },
+  ],
+];
+
 export const MAPS: Record<string, MapDef> = {
   map01: {
     id: 'map01',
@@ -316,9 +377,15 @@ export const MAPS: Record<string, MapDef> = {
     gate: PATH_MAP03[PATH_MAP03.length - 1] ?? { c: 11, r: 3 },
     waves: WAVES_MAP03,
   },
+  map04: {
+    id: 'map04',
+    path: PATH_MAP04,
+    gate: PATH_MAP04[PATH_MAP04.length - 1] ?? { c: 0, r: 9 },
+    waves: WAVES_MAP04,
+  },
 };
 
-export const MAP_LIST: MapDef[] = [MAPS.map01, MAPS.map02, MAPS.map03];
+export const MAP_LIST: MapDef[] = [MAPS.map01, MAPS.map02, MAPS.map03, MAPS.map04];
 
 export function getMap(id: string): MapDef {
   return MAPS[id] ?? MAPS.map01;
