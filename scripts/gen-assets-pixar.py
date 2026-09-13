@@ -582,6 +582,18 @@ def gen_btn_play():
     save("btn_play.png", img, w, h)
 
 
+def overlay_handcrafted() -> None:
+    """Prefer keyart-matched sprites in assets/handcrafted/ over procedural ones."""
+    hand = ROOT / "assets" / "handcrafted"
+    if not hand.is_dir():
+        return
+    for src in sorted(hand.glob("*.png")):
+        for dest_dir in (OUT, PUBLIC):
+            dest_dir.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(src, dest_dir / src.name)
+        print(f"  handcrafted → {src.name}")
+
+
 def main():
     print("Generating Pixar-appeal Watchfort sprites…")
     OUT.mkdir(parents=True, exist_ok=True)
@@ -604,6 +616,8 @@ def main():
     gen_fx_hit()
     gen_ui_coin()
     gen_btn_play()
+    print("Overlaying handcrafted keyart sprites…")
+    overlay_handcrafted()
     print("Done → assets/ and public/assets/")
 
 
