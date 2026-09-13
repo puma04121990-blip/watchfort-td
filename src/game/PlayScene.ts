@@ -47,6 +47,8 @@ interface EnemyActor {
   slowUntil: number;
   slowFactor: number;
   alive: boolean;
+  /** Next scene-time shaman heal pulse; 0 if not shaman. */
+  nextHealAt: number;
 }
 
 interface SoldierActor {
@@ -142,6 +144,8 @@ function enemyMeleeDamage(kind: EnemyKind): number {
       return 6;
     case 'runner':
       return 8;
+    case 'shaman':
+      return 7;
     case 'tank':
       return 12;
     case 'brute':
@@ -170,6 +174,8 @@ function enemySpriteSize(kind: EnemyKind): number {
       return 28;
     case 'runner':
       return 36;
+    case 'shaman':
+      return 40;
     case 'tank':
       return 42;
     case 'brute':
@@ -961,6 +967,7 @@ export class PlayScene extends Phaser.Scene {
       slowUntil: 0,
       slowFactor: 1,
       alive: true,
+      nextHealAt: kind === 'shaman' ? 0 : 0,
     });
   }
 
@@ -1002,7 +1009,54 @@ export class PlayScene extends Phaser.Scene {
         this.leak(e);
       }
     }
+    this.stepShamanHeals(now);
     this.enemies = this.enemies.filter((e) => e.alive);
+  }
+
+  private stepShamanHeals(now: number): void {
+    const HEAL_CD = 2000;
+    const HEAL_R = 100;
+    const HEAL_AMT = 10;
+    for (const s of this.enemies) {
+      if (!s.alive || s.kind !== 'shaman') continue;
+      if (s.nextHealAt === 0) {
+        s.nextHealAt = now + 800;
+        continue;
+      }
+      if (now < s.nextHealAt) continue;
+      s.nextHealAt = now + HEAL_CD;
+      let healed = 0;
+      for (const e of this.enemies) {
+        if (!e.alive || e.id === s.id) continue;
+        if (e.hp >= e.maxHp) continue;
+        if (Math.hypot(e.x - s.x, e.y - s.y) > HEAL_R) continue;
+        e.hp = Math.min(e.maxHp, e.hp + HEAL_AMT);
+        e.hpFg.width = Math.max(1, 28 * (e.hp / e.maxHp));
+        healed += 1;
+        const fx = this.add.circle(e.x, e.y - 8, 10, COLOR.lightning, 0.35).setDepth(13);
+        this.tweens.add({
+          targets: fx,
+          alpha: 0,
+          scale: 1.6,
+          duration: 280,
+          onComplete: () => {
+            fx.destroy();
+          },
+        });
+      }
+      if (healed > 0) {
+        const ring = this.add.circle(s.x, s.y, 18, COLOR.lightning, 0.25).setDepth(12);
+        this.tweens.add({
+          targets: ring,
+          alpha: 0,
+          scale: 3.2,
+          duration: 320,
+          onComplete: () => {
+            ring.destroy();
+          },
+        });
+      }
+    }
   }
 
   private leak(e: EnemyActor): void {
