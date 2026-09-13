@@ -11,6 +11,7 @@ export type SfxClip =
   | 'shot_cannon'
   | 'shot_frost'
   | 'shot_lightning'
+  | 'shot_sniper'
   | 'hit'
   | 'die'
   | 'coin'
@@ -31,6 +32,7 @@ const FILE_STEM: Record<ClipId, string> = {
   shot_cannon: 'shot_cannon',
   shot_frost: 'shot_frost',
   shot_lightning: 'shot_lightning',
+  shot_sniper: 'shot_sniper',
   hit: 'hit',
   die: 'die',
   coin: 'coin',
@@ -53,6 +55,7 @@ const COOLDOWN_MS: Partial<Record<ClipId, number>> = {
   shot_cannon: 80,
   shot_frost: 60,
   shot_lightning: 70,
+  shot_sniper: 90,
   hit: 35,
   coin: 50,
   click: 30,
@@ -63,6 +66,7 @@ const POLY_LIMIT: Partial<Record<ClipId, number>> = {
   shot_cannon: 3,
   shot_frost: 3,
   shot_lightning: 3,
+  shot_sniper: 2,
   hit: 5,
   coin: 4,
   die: 3,

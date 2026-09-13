@@ -25,6 +25,7 @@ export async function createGame(parent: string | HTMLElement): Promise<Phaser.G
     GameState.cannonDmgLevel = Math.max(0, Math.min(3, Math.floor(saved.cannonDmgLevel)));
     GameState.frostDmgLevel = Math.max(0, Math.min(3, Math.floor(saved.frostDmgLevel)));
     GameState.lightningDmgLevel = Math.max(0, Math.min(3, Math.floor(saved.lightningDmgLevel)));
+    GameState.sniperDmgLevel = Math.max(0, Math.min(3, Math.floor(saved.sniperDmgLevel)));
     GameState.musicOn = saved.musicOn !== false;
     GameState.sfxOn = saved.sfxOn !== false;
   }

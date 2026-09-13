@@ -32,6 +32,7 @@ export async function loadGameState(): Promise<GameStateSnapshot | null> {
     cannonDmgLevel: num(s.cannonDmgLevel, 0),
     frostDmgLevel: num(s.frostDmgLevel, 0),
     lightningDmgLevel: num(s.lightningDmgLevel, 0),
+    sniperDmgLevel: num(s.sniperDmgLevel, 0),
     musicOn: s.musicOn !== false,
     sfxOn: s.sfxOn !== false,
     tutorialDone: s.tutorialDone === true,

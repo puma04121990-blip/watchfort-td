@@ -32,6 +32,8 @@ export interface GameStateSnapshot {
   frostDmgLevel: number;
   /** 0–3: +3 lightning tower damage per level. */
   lightningDmgLevel: number;
+  /** 0–3: +5 sniper tower damage per level. */
+  sniperDmgLevel: number;
   /** Music bus enabled (persisted). */
   musicOn: boolean;
   /** SFX + UI buses enabled (persisted). */
@@ -50,7 +52,8 @@ export const START_GOLD_COSTS = [40, 80, 140] as const;
 export const ARROW_DMG_COSTS = [50, 100, 160] as const;
 export const CANNON_DMG_COSTS = [55, 110, 180] as const;
 export const FROST_DMG_COSTS = [45, 90, 150] as const;
-export const LIGHTNING_DMG_COSTS = [50, 100, 165] as const;
+export const SNIPER_DMG_COSTS = [70, 140, 220] as const;
+const LIGHTNING_DMG_COSTS = [50, 100, 165] as const;
 
 const DEFAULT: GameStateSnapshot = {
   coins: RUN_COINS,
@@ -70,6 +73,7 @@ const DEFAULT: GameStateSnapshot = {
   cannonDmgLevel: 0,
   frostDmgLevel: 0,
   lightningDmgLevel: 0,
+  sniperDmgLevel: 0,
   musicOn: true,
   sfxOn: true,
   tutorialDone: false,
@@ -99,6 +103,7 @@ class GameStateImpl {
   cannonDmgLevel = DEFAULT.cannonDmgLevel;
   frostDmgLevel = DEFAULT.frostDmgLevel;
   lightningDmgLevel = DEFAULT.lightningDmgLevel;
+  sniperDmgLevel = DEFAULT.sniperDmgLevel;
   musicOn = DEFAULT.musicOn;
   sfxOn = DEFAULT.sfxOn;
   tutorialDone = DEFAULT.tutorialDone;
@@ -131,6 +136,7 @@ class GameStateImpl {
     this.cannonDmgLevel = clampUpgrade(snapshot.cannonDmgLevel);
     this.frostDmgLevel = clampUpgrade(snapshot.frostDmgLevel);
     this.lightningDmgLevel = clampUpgrade(snapshot.lightningDmgLevel);
+    this.sniperDmgLevel = clampUpgrade(snapshot.sniperDmgLevel);
     this.musicOn = snapshot.musicOn !== false;
     this.sfxOn = snapshot.sfxOn !== false;
     this.tutorialDone = snapshot.tutorialDone === true;
@@ -156,6 +162,7 @@ class GameStateImpl {
       cannonDmgLevel: this.cannonDmgLevel,
       frostDmgLevel: this.frostDmgLevel,
       lightningDmgLevel: this.lightningDmgLevel,
+      sniperDmgLevel: this.sniperDmgLevel,
       musicOn: this.musicOn,
       sfxOn: this.sfxOn,
       tutorialDone: this.tutorialDone,
@@ -236,6 +243,28 @@ class GameStateImpl {
   }
 
   /** Lightning unlocks after map02 clear (Gorge). */
+
+  sniperDmgNextCost(): number | null {
+    if (this.sniperDmgLevel >= MAX_UPGRADE) return null;
+    return SNIPER_DMG_COSTS[this.sniperDmgLevel] ?? null;
+  }
+
+  buySniperDmg(): boolean {
+    const cost = this.sniperDmgNextCost();
+    if (cost === null || this.metaGold < cost) return false;
+    this.metaGold -= cost;
+    this.sniperDmgLevel += 1;
+    return true;
+  }
+
+  sniperDamageBonus(): number {
+    return this.sniperDmgLevel * 5;
+  }
+
+  isSniperUnlocked(): boolean {
+    return this.map03Stars >= 1;
+  }
+
   isLightningUnlocked(): boolean {
     return this.map02Stars >= 1;
   }

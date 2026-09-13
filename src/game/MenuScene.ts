@@ -295,6 +295,12 @@ export class MenuScene extends Phaser.Scene {
         cost: GameState.lightningDmgNextCost(),
         buy: () => GameState.buyLightningDmg(),
       },
+      {
+        labelKey: 'menu.upSniperDmg',
+        level: GameState.sniperDmgLevel,
+        cost: GameState.sniperDmgNextCost(),
+        buy: () => GameState.buySniperDmg(),
+      },
     ];
 
     rows.forEach((row, i) => {

@@ -21,6 +21,7 @@ const ru: Dict = {
   'menu.upCannonDmg': 'Урон пушки +4',
   'menu.upFrostDmg': 'Урон инея +2',
   'menu.upLightningDmg': 'Урон молнии +3',
+  'menu.upSniperDmg': 'Урон снайпера +5',
   'menu.musicOn': 'Музыка: вкл',
   'menu.musicOff': 'Музыка: выкл',
   'menu.sfxOn': 'Звук: вкл',
@@ -78,6 +79,7 @@ const ru: Dict = {
   'tower.frost': 'Иней',
   'tower.barracks': 'Казарма',
   'tower.lightning': 'Молния',
+  'tower.sniper': 'Снайпер',
 };
 
 const en: Dict = {
@@ -99,6 +101,7 @@ const en: Dict = {
   'menu.upCannonDmg': 'Cannon dmg +4',
   'menu.upFrostDmg': 'Frost dmg +2',
   'menu.upLightningDmg': 'Lightning dmg +3',
+  'menu.upSniperDmg': 'Sniper dmg +5',
   'menu.musicOn': 'Music: on',
   'menu.musicOff': 'Music: off',
   'menu.sfxOn': 'Sound: on',
@@ -156,6 +159,7 @@ const en: Dict = {
   'tower.frost': 'Frost',
   'tower.barracks': 'Barracks',
   'tower.lightning': 'Lightning',
+  'tower.sniper': 'Sniper',
 };
 
 const catalogs: Record<Locale, Dict> = { ru, en };

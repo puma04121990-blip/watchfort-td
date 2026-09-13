@@ -211,6 +211,16 @@ def gen_shot_cannon() -> np.ndarray:
 
 
 
+
+def gen_shot_sniper() -> np.ndarray:
+    dur = 0.14
+    n = int(SR * dur)
+    t = np.arange(n) / SR
+    crack = highpass(noise(n), 2500) * env_adsr(n, 0.0005, 0.02, 0.01, 0.05, 0.3)
+    body = soft_square(t, np.linspace(520, 180, n), 0.55) * env_adsr(n, 0.001, 0.03, 0.03, 0.06, 0.45)
+    whip = np.sin(2 * np.pi * np.linspace(1800, 400, n) * t) * env_adsr(n, 0.001, 0.025, 0.02, 0.05, 0.4)
+    return normalize((crack * 0.7 + body * 0.55 + whip * 0.5) * env_adsr(n, 0.001, 0.02, 0.04, 0.06, 0.55))
+
 def gen_shot_lightning() -> np.ndarray:
     dur = 0.11
     n = int(SR * dur)
@@ -426,6 +436,7 @@ CLIPS = {
     "shot_cannon": gen_shot_cannon,
     "shot_frost": gen_shot_frost,
     "shot_lightning": gen_shot_lightning,
+    "shot_sniper": gen_shot_sniper,
     "hit": gen_hit,
     "die": gen_die,
     "coin": gen_coin,
