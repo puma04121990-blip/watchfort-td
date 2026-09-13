@@ -256,8 +256,8 @@ export class MenuScene extends Phaser.Scene {
   }
 
   private buildShop(width: number, height: number): void {
-    const shopY0 = height * 0.48;
-    const rowH = 32;
+    const shopY0 = height * 0.455;
+    const rowH = 28;
     const rows: Array<{
       labelKey: string;
       level: number;
@@ -288,6 +288,12 @@ export class MenuScene extends Phaser.Scene {
         cost: GameState.frostDmgNextCost(),
         buy: () => GameState.buyFrostDmg(),
       },
+      {
+        labelKey: 'menu.upLightningDmg',
+        level: GameState.lightningDmgLevel,
+        cost: GameState.lightningDmgNextCost(),
+        buy: () => GameState.buyLightningDmg(),
+      },
     ];
 
     rows.forEach((row, i) => {
@@ -300,7 +306,7 @@ export class MenuScene extends Phaser.Scene {
       this.add
         .text(width / 2 - 110, y, info, {
           fontFamily: 'system-ui, sans-serif',
-          fontSize: '13px',
+          fontSize: '12px',
           color: maxed ? '#9CA3AF' : '#F3F4F6',
         })
         .setOrigin(0, 0.5);

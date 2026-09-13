@@ -861,6 +861,8 @@ export class PlayScene extends Phaser.Scene {
       def.damage += GameState.cannonDamageBonus();
     } else if (this.selected === 'frost') {
       def.damage += GameState.frostDamageBonus();
+    } else if (this.selected === 'lightning') {
+      def.damage += GameState.lightningDamageBonus();
     }
     const { x, y } = cellCenter(c, r);
     const shadow = contactShadow(this, x, y + 22, 40, 14, 4);

@@ -28,6 +28,8 @@ export interface GameStateSnapshot {
   cannonDmgLevel: number;
   /** 0–3: +2 frost tower damage per level. */
   frostDmgLevel: number;
+  /** 0–3: +3 lightning tower damage per level. */
+  lightningDmgLevel: number;
   /** Music bus enabled (persisted). */
   musicOn: boolean;
   /** SFX + UI buses enabled (persisted). */
@@ -46,6 +48,7 @@ export const START_GOLD_COSTS = [40, 80, 140] as const;
 export const ARROW_DMG_COSTS = [50, 100, 160] as const;
 export const CANNON_DMG_COSTS = [55, 110, 180] as const;
 export const FROST_DMG_COSTS = [45, 90, 150] as const;
+export const LIGHTNING_DMG_COSTS = [50, 100, 165] as const;
 
 const DEFAULT: GameStateSnapshot = {
   coins: RUN_COINS,
@@ -63,6 +66,7 @@ const DEFAULT: GameStateSnapshot = {
   arrowDmgLevel: 0,
   cannonDmgLevel: 0,
   frostDmgLevel: 0,
+  lightningDmgLevel: 0,
   musicOn: true,
   sfxOn: true,
   tutorialDone: false,
@@ -90,6 +94,7 @@ class GameStateImpl {
   arrowDmgLevel = DEFAULT.arrowDmgLevel;
   cannonDmgLevel = DEFAULT.cannonDmgLevel;
   frostDmgLevel = DEFAULT.frostDmgLevel;
+  lightningDmgLevel = DEFAULT.lightningDmgLevel;
   musicOn = DEFAULT.musicOn;
   sfxOn = DEFAULT.sfxOn;
   tutorialDone = DEFAULT.tutorialDone;
@@ -119,6 +124,7 @@ class GameStateImpl {
     this.arrowDmgLevel = clampUpgrade(snapshot.arrowDmgLevel);
     this.cannonDmgLevel = clampUpgrade(snapshot.cannonDmgLevel);
     this.frostDmgLevel = clampUpgrade(snapshot.frostDmgLevel);
+    this.lightningDmgLevel = clampUpgrade(snapshot.lightningDmgLevel);
     this.musicOn = snapshot.musicOn !== false;
     this.sfxOn = snapshot.sfxOn !== false;
     this.tutorialDone = snapshot.tutorialDone === true;
@@ -142,6 +148,7 @@ class GameStateImpl {
       arrowDmgLevel: this.arrowDmgLevel,
       cannonDmgLevel: this.cannonDmgLevel,
       frostDmgLevel: this.frostDmgLevel,
+      lightningDmgLevel: this.lightningDmgLevel,
       musicOn: this.musicOn,
       sfxOn: this.sfxOn,
       tutorialDone: this.tutorialDone,
@@ -273,6 +280,11 @@ class GameStateImpl {
     return FROST_DMG_COSTS[this.frostDmgLevel] ?? null;
   }
 
+  lightningDmgNextCost(): number | null {
+    if (this.lightningDmgLevel >= MAX_UPGRADE) return null;
+    return LIGHTNING_DMG_COSTS[this.lightningDmgLevel] ?? null;
+  }
+
   /** Buy one level of startGold; false if maxed or not enough meta. */
   buyStartGold(): boolean {
     const cost = this.startGoldNextCost();
@@ -309,6 +321,15 @@ class GameStateImpl {
     return true;
   }
 
+  /** Buy one level of lightningDmg; false if maxed or not enough meta. */
+  buyLightningDmg(): boolean {
+    const cost = this.lightningDmgNextCost();
+    if (cost === null || this.metaGold < cost) return false;
+    this.metaGold -= cost;
+    this.lightningDmgLevel += 1;
+    return true;
+  }
+
   /** Effective arrow damage bonus from meta upgrade. */
   arrowDamageBonus(): number {
     return this.arrowDmgLevel * 3;
@@ -322,6 +343,11 @@ class GameStateImpl {
   /** Effective frost damage bonus from meta upgrade. */
   frostDamageBonus(): number {
     return this.frostDmgLevel * 2;
+  }
+
+  /** Effective lightning damage bonus from meta upgrade. */
+  lightningDamageBonus(): number {
+    return this.lightningDmgLevel * 3;
   }
 }
 
