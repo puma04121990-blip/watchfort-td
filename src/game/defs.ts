@@ -12,6 +12,7 @@ export const COLOR = {
   towerBlue: 0x3b82c4,
   cannon: 0xf97316,
   frost: 0x22d3ee,
+  barracks: 0x3d9b6e,
   enemyRed: 0xd64545,
   gold: 0xe8b84a,
   panel: 0x111827,
@@ -19,8 +20,8 @@ export const COLOR = {
   shade: 0x1f2933,
 } as const;
 
-export type TowerKind = 'arrow' | 'cannon' | 'frost';
-export type EnemyKind = 'runner' | 'tank' | 'brute';
+export type TowerKind = 'arrow' | 'cannon' | 'frost' | 'barracks';
+export type EnemyKind = 'runner' | 'tank' | 'brute' | 'swarm';
 
 export interface TowerDef {
   kind: TowerKind;
@@ -34,6 +35,8 @@ export interface TowerDef {
   projectileKey: string;
   projectileSpeed: number;
   texture: string;
+  /** Barracks blocker HP; unused (0) on projectile towers. */
+  soldierHp: number;
 }
 
 export interface EnemyDef {
@@ -57,6 +60,7 @@ export const TOWERS: Record<TowerKind, TowerDef> = {
     projectileKey: 'projectile_arrow',
     projectileSpeed: 420,
     texture: 'tower_arrow',
+    soldierHp: 0,
   },
   cannon: {
     kind: 'cannon',
@@ -70,6 +74,7 @@ export const TOWERS: Record<TowerKind, TowerDef> = {
     projectileKey: 'projectile_cannon',
     projectileSpeed: 300,
     texture: 'tower_cannon',
+    soldierHp: 0,
   },
   frost: {
     kind: 'frost',
@@ -83,6 +88,21 @@ export const TOWERS: Record<TowerKind, TowerDef> = {
     projectileKey: 'projectile_frost',
     projectileSpeed: 360,
     texture: 'tower_frost',
+    soldierHp: 0,
+  },
+  barracks: {
+    kind: 'barracks',
+    cost: 90,
+    damage: 18,
+    range: 90,
+    cooldown: 2200,
+    splash: 0,
+    slowFactor: 1,
+    slowMs: 0,
+    projectileKey: 'projectile_arrow',
+    projectileSpeed: 0,
+    texture: 'tower_barracks',
+    soldierHp: 50,
   },
 };
 
@@ -90,6 +110,7 @@ export const ENEMIES: Record<EnemyKind, EnemyDef> = {
   runner: { kind: 'runner', hp: 36, speed: 68, gold: 10, texture: 'enemy_runner' },
   tank: { kind: 'tank', hp: 95, speed: 44, gold: 16, texture: 'enemy_tank' },
   brute: { kind: 'brute', hp: 190, speed: 36, gold: 28, texture: 'enemy_brute' },
+  swarm: { kind: 'swarm', hp: 18, speed: 96, gold: 5, texture: 'enemy_swarm' },
 };
 
 export interface WaveSpawn {
@@ -153,10 +174,12 @@ const WAVES_MAP01: WaveSpawn[][] = [
   [{ kind: 'runner', count: 8, interval: 750, delay: 200 }],
   [
     { kind: 'runner', count: 6, interval: 650, delay: 200 },
+    { kind: 'swarm', count: 6, interval: 320, delay: 900 },
     { kind: 'tank', count: 3, interval: 1400, delay: 1800 },
   ],
   [
     { kind: 'runner', count: 8, interval: 550, delay: 200 },
+    { kind: 'swarm', count: 8, interval: 280, delay: 400 },
     { kind: 'tank', count: 4, interval: 1100, delay: 1600 },
     { kind: 'brute', count: 2, interval: 2200, delay: 4200 },
   ],
@@ -206,15 +229,18 @@ const PATH_MAP02: Cell[] = [
 const WAVES_MAP02: WaveSpawn[][] = [
   [
     { kind: 'runner', count: 8, interval: 700, delay: 200 },
+    { kind: 'swarm', count: 6, interval: 300, delay: 600 },
     { kind: 'tank', count: 2, interval: 1400, delay: 2200 },
   ],
   [
     { kind: 'runner', count: 8, interval: 600, delay: 200 },
+    { kind: 'swarm', count: 8, interval: 260, delay: 400 },
     { kind: 'tank', count: 5, interval: 1200, delay: 1400 },
     { kind: 'brute', count: 1, interval: 2000, delay: 5000 },
   ],
   [
     { kind: 'runner', count: 10, interval: 500, delay: 200 },
+    { kind: 'swarm', count: 10, interval: 240, delay: 300 },
     { kind: 'tank', count: 6, interval: 1000, delay: 1200 },
     { kind: 'brute', count: 3, interval: 2000, delay: 3800 },
   ],

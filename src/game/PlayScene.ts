@@ -43,6 +43,19 @@ interface EnemyActor {
   alive: boolean;
 }
 
+interface SoldierActor {
+  sprite: Phaser.GameObjects.Image;
+  hpBg: Phaser.GameObjects.Rectangle;
+  hpFg: Phaser.GameObjects.Rectangle;
+  hp: number;
+  maxHp: number;
+  wp: number;
+  x: number;
+  y: number;
+  alive: boolean;
+  lastStrike: number;
+}
+
 interface TowerActor {
   col: number;
   row: number;
@@ -54,6 +67,7 @@ interface TowerActor {
   sprite: Phaser.GameObjects.Image;
   starMark: Phaser.GameObjects.Text | null;
   lastShot: number;
+  soldier: SoldierActor | null;
 }
 
 interface ShotActor {
@@ -93,6 +107,44 @@ function starString(n: number): string {
   return '★'.repeat(filled);
 }
 
+const HUD_KINDS: TowerKind[] = ['arrow', 'cannon', 'frost', 'barracks'];
+
+const TOWER_COLORS: Record<TowerKind, number> = {
+  arrow: COLOR.towerBlue,
+  cannon: COLOR.cannon,
+  frost: COLOR.frost,
+  barracks: COLOR.barracks,
+};
+
+const SOLDIER_MELEE_MS = 400;
+const SOLDIER_BLOCK_R = 30;
+
+function enemyMeleeDamage(kind: EnemyKind): number {
+  switch (kind) {
+    case 'swarm':
+      return 6;
+    case 'runner':
+      return 8;
+    case 'tank':
+      return 12;
+    case 'brute':
+      return 18;
+  }
+}
+
+function enemySpriteSize(kind: EnemyKind): number {
+  switch (kind) {
+    case 'swarm':
+      return 28;
+    case 'runner':
+      return 36;
+    case 'tank':
+      return 42;
+    case 'brute':
+      return 50;
+  }
+}
+
 export class PlayScene extends Phaser.Scene {
   private selected: TowerKind = 'arrow';
   private occupied = new Set<string>();
@@ -112,6 +164,7 @@ export class PlayScene extends Phaser.Scene {
   private startBg!: Phaser.GameObjects.Rectangle;
   private rangeGfx!: Phaser.GameObjects.Graphics;
   private selectMarks: Phaser.GameObjects.Rectangle[] = [];
+  private selectIcons: Phaser.GameObjects.Image[] = [];
   private hoverCol = -1;
   private hoverRow = -1;
   private endOverlay: Phaser.GameObjects.Container | null = null;
@@ -142,6 +195,7 @@ export class PlayScene extends Phaser.Scene {
     this.hoverCol = -1;
     this.hoverRow = -1;
     this.selectMarks = [];
+    this.selectIcons = [];
     this.endOverlay = null;
     this.pauseOverlay = null;
     this.towerPanel = null;
@@ -188,6 +242,7 @@ export class PlayScene extends Phaser.Scene {
     const now = this.time.now;
     this.spawnDue(now);
     this.stepEnemies(delta, now);
+    this.stepSoldiers(now);
     this.stepTowers(now);
     this.stepShots(delta);
     this.refreshHud();
@@ -252,46 +307,45 @@ export class PlayScene extends Phaser.Scene {
       .setAlpha(0.75)
       .setDepth(110);
 
-    const kinds: TowerKind[] = ['arrow', 'cannon', 'frost'];
-    const labels: Record<TowerKind, string> = {
-      arrow: t('tower.arrow'),
-      cannon: t('tower.cannon'),
-      frost: t('tower.frost'),
-    };
-    const colors: Record<TowerKind, number> = {
-      arrow: COLOR.towerBlue,
-      cannon: COLOR.cannon,
-      frost: COLOR.frost,
-    };
-
-    kinds.forEach((kind, i) => {
-      const x = 70 + i * 150;
+    HUD_KINDS.forEach((kind, i) => {
+      const x = 60 + i * 118;
       const y = y0 + HUD_H / 2;
+      const locked = kind === 'barracks' && !GameState.isBarracksUnlocked();
       const mark = this.add
-        .rectangle(x, y, 136, 68, COLOR.shade)
-        .setStrokeStyle(2, this.selected === kind ? colors[kind] : 0x374151)
+        .rectangle(x, y, 110, 68, COLOR.shade)
+        .setStrokeStyle(2, this.selected === kind ? TOWER_COLORS[kind] : 0x374151)
         .setDepth(102)
-        .setInteractive({ useHandCursor: true });
+        .setInteractive({ useHandCursor: !locked })
+        .setAlpha(locked ? 0.5 : 1);
       this.selectMarks.push(mark);
-      this.add.image(x - 40, y, TOWERS[kind].texture).setDisplaySize(40, 40).setDepth(103);
+      const icon = this.add
+        .image(x - 32, y, TOWERS[kind].texture)
+        .setDisplaySize(36, 36)
+        .setDepth(103);
+      if (locked) icon.setTint(0x667066);
+      this.selectIcons.push(icon);
       this.add
-        .text(x + 12, y - 12, labels[kind], {
+        .text(x + 16, y - 12, t(`tower.${kind}`), {
           fontFamily: 'system-ui, sans-serif',
-          fontSize: '14px',
-          color: '#F3F4F6',
+          fontSize: '13px',
+          color: locked ? '#9CA3AF' : '#F3F4F6',
         })
         .setOrigin(0.5)
         .setDepth(103);
       this.add
-        .text(x + 12, y + 10, `${TOWERS[kind].cost}`, {
+        .text(x + 16, y + 10, locked ? t('menu.locked') : `${TOWERS[kind].cost}`, {
           fontFamily: 'system-ui, sans-serif',
-          fontSize: '13px',
-          color: '#E8B84A',
+          fontSize: '12px',
+          color: locked ? '#9CA3AF' : '#E8B84A',
         })
         .setOrigin(0.5)
         .setDepth(103);
       mark.on('pointerdown', () => {
         if (this.paused) return;
+        if (kind === 'barracks' && !GameState.isBarracksUnlocked()) {
+          AudioBus.playUi('error');
+          return;
+        }
         this.selected = kind;
         this.clearTowerSelection();
         AudioBus.playUi('click');
@@ -300,12 +354,12 @@ export class PlayScene extends Phaser.Scene {
     });
 
     this.startBg = this.add
-      .rectangle(GAME_W - 110, y0 + HUD_H / 2, 180, 56, COLOR.towerBlue)
+      .rectangle(GAME_W - 96, y0 + HUD_H / 2, 156, 52, COLOR.towerBlue)
       .setStrokeStyle(2, COLOR.gold)
       .setDepth(102)
       .setInteractive({ useHandCursor: true });
     this.startLabel = this.add
-      .text(GAME_W - 110, y0 + HUD_H / 2, t('play.startWave'), {
+      .text(GAME_W - 96, y0 + HUD_H / 2, t('play.startWave'), {
         fontFamily: 'system-ui, sans-serif',
         fontSize: '16px',
         color: '#F3F4F6',
@@ -344,16 +398,17 @@ export class PlayScene extends Phaser.Scene {
   }
 
   private refreshSelect(): void {
-    const colors: Record<TowerKind, number> = {
-      arrow: COLOR.towerBlue,
-      cannon: COLOR.cannon,
-      frost: COLOR.frost,
-    };
-    const kinds: TowerKind[] = ['arrow', 'cannon', 'frost'];
     this.selectMarks.forEach((mark, i) => {
-      const kind = kinds[i];
+      const kind = HUD_KINDS[i];
       if (!kind) return;
-      mark.setStrokeStyle(3, this.selected === kind ? colors[kind] : 0x374151);
+      const locked = kind === 'barracks' && !GameState.isBarracksUnlocked();
+      mark.setStrokeStyle(3, this.selected === kind ? TOWER_COLORS[kind] : 0x374151);
+      mark.setAlpha(locked ? 0.5 : 1);
+      const icon = this.selectIcons[i];
+      if (icon) {
+        if (locked) icon.setTint(0x667066);
+        else icon.clearTint();
+      }
     });
     this.redrawRange();
   }
@@ -513,6 +568,15 @@ export class PlayScene extends Phaser.Scene {
     tw.totalSpent += cost;
     tw.def.damage = Math.floor(tw.def.damage * 1.4);
     tw.def.range = Math.floor(tw.def.range * 1.15);
+    if (tw.kind === 'barracks') {
+      tw.def.soldierHp = Math.floor(tw.def.soldierHp * 1.4);
+      if (tw.soldier?.alive) {
+        const bonus = tw.def.soldierHp - tw.soldier.maxHp;
+        tw.soldier.maxHp = tw.def.soldierHp;
+        tw.soldier.hp += Math.max(0, bonus);
+        tw.soldier.hpFg.width = Math.max(1, 24 * (tw.soldier.hp / tw.soldier.maxHp));
+      }
+    }
     tw.sprite.setTint(0xffe08a);
     if (!tw.starMark) {
       const { x, y } = cellCenter(tw.col, tw.row);
@@ -540,6 +604,7 @@ export class PlayScene extends Phaser.Scene {
     GameState.addCoins(refund);
     const key = `${tw.col},${tw.row}`;
     this.occupied.delete(key);
+    this.destroySoldier(tw);
     tw.sprite.destroy();
     tw.starMark?.destroy();
     this.towers = this.towers.filter((t) => t !== tw);
@@ -550,6 +615,10 @@ export class PlayScene extends Phaser.Scene {
 
   private tryPlace(c: number, r: number): void {
     if (this.ended || this.paused) return;
+    if (this.selected === 'barracks' && !GameState.isBarracksUnlocked()) {
+      AudioBus.playUi('error');
+      return;
+    }
     const key = `${c},${r}`;
     if (!isPlaceableGrass(this.mapDef, c, r) || this.occupied.has(key)) {
       AudioBus.playUi('error');
@@ -567,7 +636,7 @@ export class PlayScene extends Phaser.Scene {
     const def = cloneTowerDef(this.selected);
     const { x, y } = cellCenter(c, r);
     const sprite = this.add.image(x, y, def.texture).setDisplaySize(52, 52).setDepth(5);
-    this.towers.push({
+    const tw: TowerActor = {
       col: c,
       row: r,
       kind: this.selected,
@@ -578,9 +647,14 @@ export class PlayScene extends Phaser.Scene {
       sprite,
       starMark: null,
       lastShot: 0,
-    });
+      soldier: null,
+    };
+    this.towers.push(tw);
     this.occupied.add(key);
     AudioBus.playSfx('place');
+    if (tw.kind === 'barracks') {
+      this.spawnSoldier(tw);
+    }
     this.refreshHud();
   }
 
@@ -624,9 +698,8 @@ export class PlayScene extends Phaser.Scene {
     const start = this.waypoints[0];
     if (!start) return;
     const sprite = this.add.image(start.x, start.y, def.texture).setDepth(8);
-    if (kind === 'runner') sprite.setDisplaySize(36, 36);
-    else if (kind === 'tank') sprite.setDisplaySize(42, 42);
-    else sprite.setDisplaySize(50, 50);
+    const sz = enemySpriteSize(kind);
+    sprite.setDisplaySize(sz, sz);
     const hpBg = this.add.rectangle(start.x, start.y - 22, 28, 4, COLOR.shade).setDepth(11);
     const hpFg = this.add.rectangle(start.x, start.y - 22, 28, 4, COLOR.gold).setDepth(12);
     this.enemies.push({
@@ -654,7 +727,12 @@ export class PlayScene extends Phaser.Scene {
       if (!e.alive) continue;
       const factor = now < e.slowUntil ? e.slowFactor : 1;
       let budget = e.speed * factor * dt;
+      const blocker = this.blockingSoldier(e);
       while (budget > 0 && e.wp < this.waypoints.length - 1) {
+        if (blocker && Math.hypot(e.x - blocker.x, e.y - blocker.y) <= SOLDIER_BLOCK_R) {
+          budget = 0;
+          break;
+        }
         const next = this.waypoints[e.wp + 1];
         if (!next) break;
         const dx = next.x - e.x;
@@ -695,6 +773,10 @@ export class PlayScene extends Phaser.Scene {
 
   private stepTowers(now: number): void {
     for (const tw of this.towers) {
+      if (tw.kind === 'barracks') {
+        this.stepBarracks(tw, now);
+        continue;
+      }
       if (now - tw.lastShot < tw.def.cooldown) continue;
       const pos = cellCenter(tw.col, tw.row);
       const target = this.nearestEnemy(pos.x, pos.y, tw.def.range);
@@ -702,6 +784,114 @@ export class PlayScene extends Phaser.Scene {
       tw.lastShot = now;
       this.fire(tw, target, pos.x, pos.y);
     }
+  }
+
+  private stepBarracks(tw: TowerActor, now: number): void {
+    if (tw.soldier?.alive) return;
+    if (tw.lastShot > 0 && now - tw.lastShot < tw.def.cooldown) return;
+    this.spawnSoldier(tw);
+    tw.lastShot = now;
+  }
+
+  private closestPathWp(col: number, row: number): number {
+    let best = 0;
+    let bestD = Infinity;
+    const last = this.mapDef.path.length - 1;
+    for (let i = 0; i < last; i++) {
+      const p = this.mapDef.path[i];
+      if (!p) continue;
+      const d = (p.c - col) * (p.c - col) + (p.r - row) * (p.r - row);
+      if (d < bestD) {
+        bestD = d;
+        best = i;
+      }
+    }
+    return best;
+  }
+
+  private spawnSoldier(tw: TowerActor): void {
+    this.destroySoldier(tw);
+    const wp = this.closestPathWp(tw.col, tw.row);
+    const cell = this.mapDef.path[wp];
+    if (!cell) return;
+    const { x, y } = cellCenter(cell.c, cell.r);
+    const hp = Math.max(1, tw.def.soldierHp);
+    const sprite = this.add.image(x, y, 'unit_soldier').setDisplaySize(32, 32).setDepth(7);
+    const hpBg = this.add.rectangle(x, y - 20, 24, 4, COLOR.shade).setDepth(11);
+    const hpFg = this.add.rectangle(x, y - 20, 24, 4, COLOR.barracks).setDepth(12);
+    tw.soldier = {
+      sprite,
+      hpBg,
+      hpFg,
+      hp,
+      maxHp: hp,
+      wp,
+      x,
+      y,
+      alive: true,
+      lastStrike: 0,
+    };
+  }
+
+  private destroySoldier(tw: TowerActor): void {
+    const s = tw.soldier;
+    if (!s) return;
+    s.alive = false;
+    s.sprite.destroy();
+    s.hpBg.destroy();
+    s.hpFg.destroy();
+    tw.soldier = null;
+  }
+
+  private blockingSoldier(e: EnemyActor): SoldierActor | null {
+    let best: SoldierActor | null = null;
+    let bestD = SOLDIER_BLOCK_R;
+    for (const tw of this.towers) {
+      const s = tw.soldier;
+      if (!s?.alive) continue;
+      if (s.wp < e.wp) continue;
+      const d = Math.hypot(s.x - e.x, s.y - e.y);
+      if (d <= bestD) {
+        bestD = d;
+        best = s;
+      }
+    }
+    return best;
+  }
+
+  private stepSoldiers(now: number): void {
+    for (const tw of this.towers) {
+      const s = tw.soldier;
+      if (!s?.alive) continue;
+      let foe: EnemyActor | null = null;
+      let bestD = SOLDIER_BLOCK_R;
+      for (const e of this.enemies) {
+        if (!e.alive) continue;
+        if (s.wp < e.wp) continue;
+        const d = Math.hypot(e.x - s.x, e.y - s.y);
+        if (d <= bestD) {
+          bestD = d;
+          foe = e;
+        }
+      }
+      if (!foe) continue;
+      if (now - s.lastStrike < SOLDIER_MELEE_MS) continue;
+      s.lastStrike = now;
+      this.hurt(foe, tw.def.damage, 1, 0);
+      this.hurtSoldier(tw, enemyMeleeDamage(foe.kind));
+      AudioBus.playSfx('hit');
+    }
+  }
+
+  private hurtSoldier(tw: TowerActor, dmg: number): void {
+    const s = tw.soldier;
+    if (!s?.alive) return;
+    s.hp -= dmg;
+    s.hpFg.width = Math.max(1, 24 * (s.hp / s.maxHp));
+    if (s.hp > 0) return;
+    this.destroySoldier(tw);
+    tw.lastShot = this.time.now;
+    AudioBus.playSfx('die');
   }
 
   private nearestEnemy(x: number, y: number, range: number): EnemyActor | null {

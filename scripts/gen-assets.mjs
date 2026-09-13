@@ -33,6 +33,11 @@ const P = {
   wood: [0x8b, 0x5a, 0x2b, 255],
   woodL: [0xb0, 0x78, 0x3c, 255],
   iron: [0x6b, 0x72, 0x80, 255],
+  barracks: [0x3d, 0x9b, 0x6e, 255],
+  barracksL: [0x5a, 0xb8, 0x88, 255],
+  barracksD: [0x2a, 0x70, 0x4e, 255],
+  swarm: [0xe8, 0x6a, 0x3c, 255],
+  skin: [0xd4, 0xa0, 0x78, 255],
   transparent: [0, 0, 0, 0],
 };
 
@@ -231,6 +236,36 @@ function towerBase(c, accent, accentL) {
   save('tower_frost.png', c);
 }
 
+// barracks
+{
+  const c = createCanvas(64, 64);
+  towerBase(c, P.barracks, P.barracksL);
+  fillRect(c, 26, 38, 12, 14, P.shade);
+  fillRect(c, 28, 40, 8, 10, P.wood);
+  fillRect(c, 44, 12, 3, 24, P.iron);
+  fillRect(c, 44, 12, 16, 11, P.barracks);
+  fillRect(c, 46, 14, 12, 7, P.gold);
+  fillCircle(c, 32, 16, 4, P.barracksD);
+  fillCircle(c, 32, 16, 2, P.gold);
+  save('tower_barracks.png', c);
+}
+
+// soldier (blocker unit)
+{
+  const c = createCanvas(32, 32);
+  fillCircle(c, 16, 28, 6, [0, 0, 0, 55]);
+  fillRect(c, 11, 20, 4, 8, P.wood);
+  fillRect(c, 17, 20, 4, 8, P.wood);
+  fillRect(c, 10, 12, 12, 10, P.barracks);
+  fillRect(c, 11, 13, 10, 8, P.barracksL);
+  outlineRect(c, 10, 12, 12, 10, P.shade);
+  fillCircle(c, 16, 10, 5, P.gold);
+  fillCircle(c, 16, 11, 3, P.skin);
+  fillRect(c, 24, 4, 2, 22, P.iron);
+  fillRect(c, 22, 3, 6, 4, P.gold);
+  save('unit_soldier.png', c);
+}
+
 function enemyBody(size, dark) {
   const c = createCanvas(size, size);
   const mid = Math.floor(size / 2);
@@ -262,6 +297,22 @@ function enemyBody(size, dark) {
   fillCircle(c, 20, 6, 3, P.gold);
   fillCircle(c, 32, 6, 3, P.gold);
   save('enemy_brute.png', c);
+}
+
+// swarm — small, fast critter
+{
+  const c = createCanvas(32, 32);
+  fillCircle(c, 16, 26, 5, [0, 0, 0, 50]);
+  fillCircle(c, 16, 17, 8, P.redD);
+  fillCircle(c, 16, 15, 6, P.swarm);
+  fillCircle(c, 16, 14, 4, P.red);
+  fillRect(c, 6, 16, 5, 2, P.redD);
+  fillRect(c, 21, 16, 5, 2, P.redD);
+  fillRect(c, 8, 21, 3, 5, P.redD);
+  fillRect(c, 21, 21, 3, 5, P.redD);
+  setPx(c, 14, 13, P.gold);
+  setPx(c, 18, 13, P.gold);
+  save('enemy_swarm.png', c);
 }
 
 {

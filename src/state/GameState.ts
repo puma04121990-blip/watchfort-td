@@ -103,6 +103,11 @@ class GameStateImpl {
     if (mapId === 'map02') return this.map01Stars >= 1;
     return false;
   }
+
+  /** Barracks unlocks after the first map01 clear (any stars). */
+  isBarracksUnlocked(): boolean {
+    return this.map01Stars >= 1;
+  }
 }
 
 export const GameState = new GameStateImpl();

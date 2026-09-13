@@ -32,6 +32,7 @@ const ru: Dict = {
   'tower.arrow': 'Стрелы',
   'tower.cannon': 'Пушка',
   'tower.frost': 'Иней',
+  'tower.barracks': 'Казарма',
 };
 
 const en: Dict = {
@@ -64,6 +65,7 @@ const en: Dict = {
   'tower.arrow': 'Arrow',
   'tower.cannon': 'Cannon',
   'tower.frost': 'Frost',
+  'tower.barracks': 'Barracks',
 };
 
 const catalogs: Record<Locale, Dict> = { ru, en };
