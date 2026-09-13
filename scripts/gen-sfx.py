@@ -210,6 +210,16 @@ def gen_shot_cannon() -> np.ndarray:
     return normalize(boom * 0.85 + crack * 0.35 + body * 0.25 + drop * 0.4)
 
 
+
+def gen_shot_lightning() -> np.ndarray:
+    dur = 0.11
+    n = int(SR * dur)
+    t = np.arange(n) / SR
+    zap = soft_square(t, np.linspace(1600, 420, n), 0.65) * 0.45
+    crack = highpass(noise(n), 3000) * env_adsr(n, 0.0005, 0.015, 0.01, 0.04, 0.25)
+    spark = np.sin(2 * np.pi * np.linspace(2400, 900, n) * t) * env_adsr(n, 0.001, 0.02, 0.02, 0.05, 0.4)
+    return normalize((zap + crack * 0.7 + spark * 0.55) * env_adsr(n, 0.001, 0.02, 0.03, 0.05, 0.5))
+
 def gen_shot_frost() -> np.ndarray:
     dur = 0.12
     n = int(SR * dur)
@@ -415,6 +425,7 @@ CLIPS = {
     "shot_arrow": gen_shot_arrow,
     "shot_cannon": gen_shot_cannon,
     "shot_frost": gen_shot_frost,
+    "shot_lightning": gen_shot_lightning,
     "hit": gen_hit,
     "die": gen_die,
     "coin": gen_coin,

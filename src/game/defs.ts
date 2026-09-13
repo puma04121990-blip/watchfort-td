@@ -13,6 +13,7 @@ export const COLOR = {
   cannon: 0xf97316,
   frost: 0x22d3ee,
   barracks: 0x3d9b6e,
+  lightning: 0xa855f7,
   enemyRed: 0xd64545,
   gold: 0xe8b84a,
   panel: 0x111827,
@@ -20,7 +21,7 @@ export const COLOR = {
   shade: 0x1f2933,
 } as const;
 
-export type TowerKind = 'arrow' | 'cannon' | 'frost' | 'barracks';
+export type TowerKind = 'arrow' | 'cannon' | 'frost' | 'lightning' | 'barracks';
 export type EnemyKind = 'runner' | 'tank' | 'brute' | 'swarm';
 
 export interface TowerDef {
@@ -37,6 +38,10 @@ export interface TowerDef {
   texture: string;
   /** Barracks blocker HP; unused (0) on projectile towers. */
   soldierHp: number;
+  /** Extra chain hops after primary hit (lightning). */
+  chainHops: number;
+  /** Max distance between chain hops. */
+  chainRange: number;
 }
 
 export interface EnemyDef {
@@ -61,6 +66,8 @@ export const TOWERS: Record<TowerKind, TowerDef> = {
     projectileSpeed: 420,
     texture: 'tower_arrow',
     soldierHp: 0,
+    chainHops: 0,
+    chainRange: 0,
   },
   cannon: {
     kind: 'cannon',
@@ -75,6 +82,8 @@ export const TOWERS: Record<TowerKind, TowerDef> = {
     projectileSpeed: 300,
     texture: 'tower_cannon',
     soldierHp: 0,
+    chainHops: 0,
+    chainRange: 0,
   },
   frost: {
     kind: 'frost',
@@ -89,6 +98,24 @@ export const TOWERS: Record<TowerKind, TowerDef> = {
     projectileSpeed: 360,
     texture: 'tower_frost',
     soldierHp: 0,
+    chainHops: 0,
+    chainRange: 0,
+  },
+  lightning: {
+    kind: 'lightning',
+    cost: 95,
+    damage: 14,
+    range: 145,
+    cooldown: 900,
+    splash: 0,
+    slowFactor: 1,
+    slowMs: 0,
+    projectileKey: 'projectile_lightning',
+    projectileSpeed: 0,
+    texture: 'tower_lightning',
+    soldierHp: 0,
+    chainHops: 2,
+    chainRange: 110,
   },
   barracks: {
     kind: 'barracks',
@@ -103,6 +130,8 @@ export const TOWERS: Record<TowerKind, TowerDef> = {
     projectileSpeed: 0,
     texture: 'tower_barracks',
     soldierHp: 50,
+    chainHops: 0,
+    chainRange: 0,
   },
 };
 

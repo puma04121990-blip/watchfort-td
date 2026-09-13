@@ -214,6 +214,11 @@ class GameStateImpl {
     return this.map01Stars >= 1;
   }
 
+  /** Lightning unlocks after map02 clear (Gorge). */
+  isLightningUnlocked(): boolean {
+    return this.map02Stars >= 1;
+  }
+
   /** Hard difficulty unlocks with the same gate as barracks. */
   isHardUnlocked(): boolean {
     return this.map01Stars >= 1;

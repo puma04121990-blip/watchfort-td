@@ -123,7 +123,7 @@ function starString(n: number): string {
   return '★'.repeat(filled);
 }
 
-const HUD_KINDS: TowerKind[] = ['arrow', 'cannon', 'frost', 'barracks'];
+const HUD_KINDS: TowerKind[] = ['arrow', 'cannon', 'frost', 'lightning', 'barracks'];
 
 
 const SOLDIER_MELEE_MS = 400;
@@ -414,41 +414,46 @@ export class PlayScene extends Phaser.Scene {
       .setDepth(110);
 
     HUD_KINDS.forEach((kind, i) => {
-      const x = 60 + i * 118;
+      const x = 48 + i * 98;
       const y = y0 + HUD_H / 2;
-      const locked = kind === 'barracks' && !GameState.isBarracksUnlocked();
+      const locked =
+        (kind === 'barracks' && !GameState.isBarracksUnlocked()) ||
+        (kind === 'lightning' && !GameState.isLightningUnlocked());
       const mark = this.add
-        .rectangle(x, y, 112, 70, 0x162033)
+        .rectangle(x, y, 94, 70, 0x162033)
         .setStrokeStyle(3, this.selected === kind ? COLOR.gold : 0x4b5568)
         .setDepth(102)
         .setInteractive({ useHandCursor: !locked })
         .setAlpha(locked ? 0.5 : 1);
       this.selectMarks.push(mark);
       const icon = this.add
-        .image(x - 32, y, TOWERS[kind].texture)
-        .setDisplaySize(44, 44)
+        .image(x - 28, y, TOWERS[kind].texture)
+        .setDisplaySize(36, 36)
         .setDepth(103);
       if (locked) icon.setTint(0x667066);
       this.selectIcons.push(icon);
       this.add
-        .text(x + 16, y - 12, t(`tower.${kind}`), {
+        .text(x + 14, y - 12, t(`tower.${kind}`), {
           fontFamily: 'system-ui, sans-serif',
-          fontSize: '13px',
+          fontSize: '11px',
           color: locked ? '#9CA3AF' : '#F3F4F6',
         })
         .setOrigin(0.5)
         .setDepth(103);
       this.add
-        .text(x + 16, y + 10, locked ? t('menu.locked') : `${TOWERS[kind].cost}`, {
+        .text(x + 14, y + 10, locked ? t('menu.locked') : `${TOWERS[kind].cost}`, {
           fontFamily: 'system-ui, sans-serif',
-          fontSize: '12px',
+          fontSize: '11px',
           color: locked ? '#9CA3AF' : '#E8B84A',
         })
         .setOrigin(0.5)
         .setDepth(103);
       mark.on('pointerdown', () => {
         if (this.paused || this.tutorialOpen) return;
-        if (kind === 'barracks' && !GameState.isBarracksUnlocked()) {
+        if (
+          (kind === 'barracks' && !GameState.isBarracksUnlocked()) ||
+          (kind === 'lightning' && !GameState.isLightningUnlocked())
+        ) {
           AudioBus.playUi('error');
           return;
         }
@@ -573,7 +578,9 @@ export class PlayScene extends Phaser.Scene {
     this.selectMarks.forEach((mark, i) => {
       const kind = HUD_KINDS[i];
       if (!kind) return;
-      const locked = kind === 'barracks' && !GameState.isBarracksUnlocked();
+      const locked =
+        (kind === 'barracks' && !GameState.isBarracksUnlocked()) ||
+        (kind === 'lightning' && !GameState.isLightningUnlocked());
       mark.setStrokeStyle(3, this.selected === kind ? COLOR.gold : 0x4b5568);
       mark.setAlpha(locked ? 0.5 : 1);
       const icon = this.selectIcons[i];
@@ -774,6 +781,10 @@ export class PlayScene extends Phaser.Scene {
     tw.totalSpent += cost;
     tw.def.damage = Math.floor(tw.def.damage * 1.4);
     tw.def.range = Math.floor(tw.def.range * 1.15);
+    if (tw.kind === 'lightning') {
+      tw.def.chainHops = Math.min(4, tw.def.chainHops + 1);
+      tw.def.chainRange = Math.floor(tw.def.chainRange * 1.15);
+    }
     if (tw.kind === 'barracks') {
       tw.def.soldierHp = Math.floor(tw.def.soldierHp * 1.4);
       if (tw.soldier?.alive) {
@@ -822,7 +833,10 @@ export class PlayScene extends Phaser.Scene {
 
   private tryPlace(c: number, r: number): void {
     if (this.ended || this.paused) return;
-    if (this.selected === 'barracks' && !GameState.isBarracksUnlocked()) {
+    if (
+      (this.selected === 'barracks' && !GameState.isBarracksUnlocked()) ||
+      (this.selected === 'lightning' && !GameState.isLightningUnlocked())
+    ) {
       AudioBus.playUi('error');
       return;
     }
@@ -1015,7 +1029,11 @@ export class PlayScene extends Phaser.Scene {
       const target = this.pickEnemy(pos.x, pos.y, tw.def.range);
       if (!target) continue;
       tw.lastShot = now;
-      this.fire(tw, target, pos.x, pos.y);
+      if (tw.kind === 'lightning') {
+        this.fireLightning(tw, target, pos.x, pos.y);
+      } else {
+        this.fire(tw, target, pos.x, pos.y);
+      }
     }
   }
 
@@ -1185,6 +1203,52 @@ export class PlayScene extends Phaser.Scene {
       }
     }
     return best;
+  }
+
+  private fireLightning(tw: TowerActor, primary: EnemyActor, x: number, y: number): void {
+    const hops = Math.max(0, tw.def.chainHops);
+    const chainRange = Math.max(40, tw.def.chainRange);
+    const hit: EnemyActor[] = [primary];
+    let from = primary;
+    for (let h = 0; h < hops; h++) {
+      let best: EnemyActor | null = null;
+      let bestD = Infinity;
+      for (const e of this.enemies) {
+        if (!e.alive || hit.includes(e)) continue;
+        const d = Math.hypot(e.x - from.x, e.y - from.y);
+        if (d <= chainRange && d < bestD) {
+          best = e;
+          bestD = d;
+        }
+      }
+      if (!best) break;
+      hit.push(best);
+      from = best;
+    }
+
+    const g = this.add.graphics().setDepth(14);
+    g.lineStyle(3, COLOR.lightning, 0.95);
+    let px = x;
+    let py = y;
+    for (const e of hit) {
+      g.lineBetween(px, py, e.x, e.y);
+      px = e.x;
+      py = e.y;
+    }
+    this.time.delayedCall(90, () => {
+      g.destroy();
+    });
+
+    AudioBus.playSfx('shot_lightning');
+    hit.forEach((e, i) => {
+      const falloff = i === 0 ? 1 : i === 1 ? 0.7 : 0.5;
+      const dmg = Math.max(1, Math.floor(tw.def.damage * falloff));
+      this.hurt(e, dmg, 1, 0);
+      const fx = this.add.image(e.x, e.y, 'projectile_lightning').setDisplaySize(22, 22).setDepth(13);
+      this.time.delayedCall(70, () => {
+        fx.destroy();
+      });
+    });
   }
 
   private fire(tw: TowerActor, target: EnemyActor, x: number, y: number): void {
