@@ -3,6 +3,7 @@ import { t } from '../i18n';
 import { GameState } from '../state/GameState';
 import { AudioBus } from '../audio/AudioBus';
 import { hookLevelComplete, hookLevelFail } from '../platform/hooks';
+import { ads } from '../platform/ads';
 import {
   TILE,
   COLS,
@@ -91,6 +92,8 @@ export class PlayScene extends Phaser.Scene {
   private selectMarks: Phaser.GameObjects.Rectangle[] = [];
   private hoverCol = -1;
   private hoverRow = -1;
+  private endOverlay: Phaser.GameObjects.Container | null = null;
+  private navigating = false;
 
   constructor() {
     super({ key: 'PlayScene' });
@@ -110,6 +113,8 @@ export class PlayScene extends Phaser.Scene {
     this.hoverCol = -1;
     this.hoverRow = -1;
     this.selectMarks = [];
+    this.endOverlay = null;
+    this.navigating = false;
 
     AudioBus.playMusic('play');
     this.cameras.main.setBackgroundColor(`#${COLOR.shade.toString(16).padStart(6, '0')}`);
@@ -132,10 +137,7 @@ export class PlayScene extends Phaser.Scene {
     });
 
     this.input.on('pointerdown', (p: Phaser.Input.Pointer) => {
-      if (this.ended) {
-        this.scene.start('MenuScene');
-        return;
-      }
+      if (this.ended) return;
       if (p.y >= ROWS * TILE) return;
       const c = Math.floor(p.x / TILE);
       const r = Math.floor(p.y / TILE);
@@ -299,7 +301,7 @@ export class PlayScene extends Phaser.Scene {
     const shown = Math.min(Math.max(GameState.wave, 0), TOTAL_WAVES);
     const phase = this.waveLive ? `${shown}/${TOTAL_WAVES}` : `${shown}/${TOTAL_WAVES} · ${t('play.waiting')}`;
     this.waveText.setText(`${t('play.wave')}: ${phase}`);
-    const canStart = !this.waveLive && GameState.wave < TOTAL_WAVES;
+    const canStart = !this.ended && !this.waveLive && GameState.wave < TOTAL_WAVES;
     this.startBg.setFillStyle(canStart ? COLOR.towerBlue : COLOR.shade);
     this.startBg.setAlpha(canStart ? 1 : 0.55);
     this.startLabel.setText(canStart ? t('play.startWave') : t('play.waiting'));
@@ -324,6 +326,7 @@ export class PlayScene extends Phaser.Scene {
   }
 
   private tryPlace(c: number, r: number): void {
+    if (this.ended) return;
     const key = `${c},${r}`;
     if (!isPlaceableGrass(c, r) || this.occupied.has(key)) {
       AudioBus.playUi('error');
@@ -601,23 +604,151 @@ export class PlayScene extends Phaser.Scene {
   }
 
   private showBanner(title: string, victory: boolean): void {
-    this.add.rectangle(GAME_W / 2, GAME_H / 2, GAME_W, GAME_H, COLOR.panel, 0.72).setDepth(200);
-    this.add
-      .text(GAME_W / 2, GAME_H / 2 - 20, title, {
+    if (this.endOverlay) {
+      this.endOverlay.destroy(true);
+      this.endOverlay = null;
+    }
+
+    const root = this.add.container(0, 0).setDepth(200);
+    this.endOverlay = root;
+
+    const dim = this.add.rectangle(GAME_W / 2, GAME_H / 2, GAME_W, GAME_H, COLOR.panel, 0.78);
+    dim.setInteractive(); // block clicks through to the field
+    root.add(dim);
+
+    const titleY = victory ? GAME_H / 2 - 70 : GAME_H / 2 - 110;
+    root.add(
+      this.add
+        .text(GAME_W / 2, titleY, title, {
+          fontFamily: 'system-ui, sans-serif',
+          fontSize: '36px',
+          color: victory ? '#E8B84A' : '#D64545',
+          fontStyle: 'bold',
+        })
+        .setOrigin(0.5),
+    );
+
+    const btnW = 200;
+    const btnH = 48;
+    const gap = 16;
+    let cy = victory ? GAME_H / 2 + 10 : GAME_H / 2 - 20;
+
+    if (!victory) {
+      const contBg = this.add
+        .rectangle(GAME_W / 2, cy, btnW, btnH, COLOR.towerBlue)
+        .setStrokeStyle(2, COLOR.gold)
+        .setInteractive({ useHandCursor: true });
+      const contLabel = this.add
+        .text(GAME_W / 2, cy, t('play.continue'), {
+          fontFamily: 'system-ui, sans-serif',
+          fontSize: '18px',
+          color: '#F3F4F6',
+        })
+        .setOrigin(0.5);
+      contBg.on('pointerdown', () => {
+        void this.onContinue();
+      });
+      root.add(contBg);
+      root.add(contLabel);
+      cy += btnH / 2 + 18;
+      root.add(
+        this.add
+          .text(GAME_W / 2, cy, t('play.continueHint'), {
+            fontFamily: 'system-ui, sans-serif',
+            fontSize: '13px',
+            color: '#F3F4F6',
+          })
+          .setOrigin(0.5)
+          .setAlpha(0.8),
+      );
+      cy += 36;
+    }
+
+    const retryBg = this.add
+      .rectangle(GAME_W / 2, cy, btnW, btnH, COLOR.shade)
+      .setStrokeStyle(2, COLOR.gold)
+      .setInteractive({ useHandCursor: true });
+    const retryLabel = this.add
+      .text(GAME_W / 2, cy, t('play.retry'), {
         fontFamily: 'system-ui, sans-serif',
-        fontSize: '36px',
-        color: victory ? '#E8B84A' : '#D64545',
-        fontStyle: 'bold',
-      })
-      .setOrigin(0.5)
-      .setDepth(201);
-    this.add
-      .text(GAME_W / 2, GAME_H / 2 + 28, t('play.tapMenu'), {
-        fontFamily: 'system-ui, sans-serif',
-        fontSize: '16px',
+        fontSize: '18px',
         color: '#F3F4F6',
       })
-      .setOrigin(0.5)
-      .setDepth(201);
+      .setOrigin(0.5);
+    retryBg.on('pointerdown', () => {
+      void this.onRetry();
+    });
+    root.add(retryBg);
+    root.add(retryLabel);
+    cy += btnH + gap;
+
+    const menuBg = this.add
+      .rectangle(GAME_W / 2, cy, btnW, btnH, COLOR.shade)
+      .setStrokeStyle(2, 0x374151)
+      .setInteractive({ useHandCursor: true });
+    const menuLabel = this.add
+      .text(GAME_W / 2, cy, t('play.menu'), {
+        fontFamily: 'system-ui, sans-serif',
+        fontSize: '18px',
+        color: '#F3F4F6',
+      })
+      .setOrigin(0.5);
+    menuBg.on('pointerdown', () => {
+      void this.onMenu();
+    });
+    root.add(menuBg);
+    root.add(menuLabel);
+  }
+
+  private async onRetry(): Promise<void> {
+    if (this.navigating) return;
+    this.navigating = true;
+    AudioBus.playUi('click');
+    await ads.showFullscreen();
+    this.scene.restart();
+  }
+
+  private async onMenu(): Promise<void> {
+    if (this.navigating) return;
+    this.navigating = true;
+    AudioBus.playUi('click');
+    await ads.showFullscreen();
+    this.scene.start('MenuScene');
+  }
+
+  private async onContinue(): Promise<void> {
+    if (this.navigating || !this.ended) return;
+    this.navigating = true;
+    AudioBus.playUi('click');
+    const ok = await ads.showRewardedVideo();
+    if (!ok) {
+      this.navigating = false;
+      return;
+    }
+    GameState.gateHp = Math.max(1, GameState.gateHp);
+    this.clearEnemiesOnGateCell();
+    this.ended = false;
+    this.navigating = false;
+    if (this.endOverlay) {
+      this.endOverlay.destroy(true);
+      this.endOverlay = null;
+    }
+    this.refreshHud();
+    this.redrawRange();
+  }
+
+  private clearEnemiesOnGateCell(): void {
+    for (const e of this.enemies) {
+      if (!e.alive) continue;
+      const c = Math.floor(e.x / TILE);
+      const r = Math.floor(e.y / TILE);
+      if (c === GATE_CELL.c && r === GATE_CELL.r) {
+        e.alive = false;
+        e.sprite.destroy();
+        e.hpBg.destroy();
+        e.hpFg.destroy();
+      }
+    }
+    this.enemies = this.enemies.filter((e) => e.alive);
   }
 }
