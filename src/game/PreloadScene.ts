@@ -19,6 +19,7 @@ const IMAGES = [
   'enemy_swarm',
   'enemy_shaman',
   'enemy_splitter',
+  'enemy_armored',
   'projectile_arrow',
   'projectile_cannon',
   'projectile_frost',

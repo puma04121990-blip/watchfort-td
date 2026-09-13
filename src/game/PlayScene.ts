@@ -152,6 +152,8 @@ function enemyMeleeDamage(kind: EnemyKind): number {
       return 12;
     case 'brute':
       return 18;
+    case 'armored':
+      return 14;
   }
 }
 
@@ -184,6 +186,8 @@ function enemySpriteSize(kind: EnemyKind): number {
       return 42;
     case 'brute':
       return 50;
+    case 'armored':
+      return 46;
   }
 }
 
@@ -1421,8 +1425,11 @@ export class PlayScene extends Phaser.Scene {
 
   private hurt(e: EnemyActor, dmg: number, slowFactor: number, slowMs: number): void {
     if (!e.alive) return;
-    e.hp -= dmg;
-    this.spawnFloatDmg(e.x, e.y, dmg, slowMs > 0);
+    const def = ENEMIES[e.kind];
+    let dealt = Math.max(1, Math.round(dmg) - (def.armorFlat || 0));
+    if (def.hitCap > 0) dealt = Math.min(dealt, def.hitCap);
+    e.hp -= dealt;
+    this.spawnFloatDmg(e.x, e.y, dealt, slowMs > 0);
     if (slowMs > 0) {
       e.slowUntil = this.time.now + slowMs;
       e.slowFactor = slowFactor;
