@@ -71,9 +71,9 @@ export class MenuScene extends Phaser.Scene {
       })
       .setOrigin(0.5);
 
-    const cardW = 108;
-    const cardH = 80;
-    const gap = 6;
+    const cardW = 92;
+    const cardH = 72;
+    const gap = 4;
     const totalW = MAP_LIST.length * cardW + (MAP_LIST.length - 1) * gap;
     const startX = width / 2 - totalW / 2 + cardW / 2;
     const cardY = height * 0.34;
@@ -85,6 +85,7 @@ export class MenuScene extends Phaser.Scene {
       map04: 'menu.map4',
       map05: 'menu.map5',
       map06: 'menu.map6',
+      map07: 'menu.map7',
     };
 
     for (let i = 0; i < MAP_LIST.length; i++) {
