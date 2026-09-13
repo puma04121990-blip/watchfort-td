@@ -107,7 +107,7 @@ const en: Dict = {
   'play.nextWave': 'Next: {list}',
   'play.speed1': '×1',
   'play.speed2': '×2',
-  'play.boss': 'Босс',
+  'play.boss': 'Boss',
   'play.autoStart': 'Start {n}',
   'play.tut1': 'Place towers on grass by the road',
   'play.tut2': 'Start the wave (or wait for the timer)',
