@@ -26,6 +26,10 @@ import {
   type TowerDef,
 } from './defs';
 
+type TargetMode = 'first' | 'closest' | 'strong';
+
+const TARGET_MODES: TargetMode[] = ['first', 'closest', 'strong'];
+
 interface EnemyActor {
   id: number;
   kind: EnemyKind;
@@ -186,6 +190,8 @@ export class PlayScene extends Phaser.Scene {
   private pauseOverlay: Phaser.GameObjects.Container | null = null;
   private speedMul = 1;
   private speedLabel!: Phaser.GameObjects.Text;
+  private targetMode: TargetMode = 'first';
+  private targetLabel!: Phaser.GameObjects.Text;
   private nextWaveText!: Phaser.GameObjects.Text;
   private towerPanel: Phaser.GameObjects.Container | null = null;
   private selectedTower: TowerActor | null = null;
@@ -237,6 +243,7 @@ export class PlayScene extends Phaser.Scene {
     this.lastWinMeta = 0;
     this.metaDoubled = false;
     this.speedMul = 1;
+    this.targetMode = 'first';
     this.time.timeScale = 1;
     this.time.paused = false;
     this.buildDeadline = 0;
@@ -265,6 +272,7 @@ export class PlayScene extends Phaser.Scene {
     this.buildBossBar();
     this.buildPauseButton();
     this.buildSpeedButton();
+    this.buildTargetButton();
 
     this.input.on('pointermove', (p: Phaser.Input.Pointer) => {
       if (this.ended || this.paused || this.tutorialOpen || p.y >= ROWS * TILE) {
@@ -493,6 +501,42 @@ export class PlayScene extends Phaser.Scene {
     AudioBus.playUi('click');
   }
 
+  private buildTargetButton(): void {
+    const x = GAME_W - 186;
+    const y = 28;
+    const bg = this.add
+      .rectangle(0, 0, 128, 36, COLOR.panel, 0.92)
+      .setStrokeStyle(2, COLOR.gold)
+      .setInteractive({ useHandCursor: true });
+    this.targetLabel = this.add
+      .text(0, 0, this.targetModeLabel(), {
+        fontFamily: 'system-ui, sans-serif',
+        fontSize: '11px',
+        color: '#F3F4F6',
+        fontStyle: 'bold',
+      })
+      .setOrigin(0.5);
+    this.add.container(x, y, [bg, this.targetLabel]).setDepth(120);
+    bg.on('pointerdown', (pointer: Phaser.Input.Pointer) => {
+      pointer.event?.stopPropagation?.();
+      this.cycleTargetMode();
+    });
+  }
+
+  private targetModeLabel(): string {
+    if (this.targetMode === 'closest') return t('play.targetClosest');
+    if (this.targetMode === 'strong') return t('play.targetStrong');
+    return t('play.targetFirst');
+  }
+
+  private cycleTargetMode(): void {
+    if (this.ended || this.paused) return;
+    const idx = TARGET_MODES.indexOf(this.targetMode);
+    this.targetMode = TARGET_MODES[(idx + 1) % TARGET_MODES.length] ?? 'first';
+    if (this.targetLabel) this.targetLabel.setText(this.targetModeLabel());
+    AudioBus.playUi('click');
+  }
+
   private refreshSelect(): void {
     this.selectMarks.forEach((mark, i) => {
       const kind = HUD_KINDS[i];
@@ -530,6 +574,9 @@ export class PlayScene extends Phaser.Scene {
     this.refreshNextWavePreview();
     if (this.speedLabel) {
       this.speedLabel.setText(this.speedMul >= 2 ? t('play.speed2') : t('play.speed1'));
+    }
+    if (this.targetLabel) {
+      this.targetLabel.setText(this.targetModeLabel());
     }
     this.refreshBossBar();
   }
@@ -923,7 +970,7 @@ export class PlayScene extends Phaser.Scene {
       }
       if (now - tw.lastShot < tw.def.cooldown) continue;
       const pos = cellCenter(tw.col, tw.row);
-      const target = this.nearestEnemy(pos.x, pos.y, tw.def.range);
+      const target = this.pickEnemy(pos.x, pos.y, tw.def.range);
       if (!target) continue;
       tw.lastShot = now;
       this.fire(tw, target, pos.x, pos.y);
@@ -1007,17 +1054,14 @@ export class PlayScene extends Phaser.Scene {
     for (const tw of this.towers) {
       const s = tw.soldier;
       if (!s?.alive) continue;
-      let foe: EnemyActor | null = null;
-      let bestD = SOLDIER_BLOCK_R;
+      const candidates: EnemyActor[] = [];
       for (const e of this.enemies) {
         if (!e.alive) continue;
         if (s.wp < e.wp) continue;
         const d = Math.hypot(e.x - s.x, e.y - s.y);
-        if (d <= bestD) {
-          bestD = d;
-          foe = e;
-        }
+        if (d <= SOLDIER_BLOCK_R) candidates.push(e);
       }
+      const foe = this.pickEnemyFrom(s.x, s.y, candidates);
       if (!foe) continue;
       if (now - s.lastStrike < SOLDIER_MELEE_MS) continue;
       s.lastStrike = now;
@@ -1038,15 +1082,61 @@ export class PlayScene extends Phaser.Scene {
     AudioBus.playSfx('die');
   }
 
-  private nearestEnemy(x: number, y: number, range: number): EnemyActor | null {
-    let best: EnemyActor | null = null;
-    let bestD = range;
+  private pickEnemy(x: number, y: number, range: number): EnemyActor | null {
+    const candidates: EnemyActor[] = [];
     for (const e of this.enemies) {
       if (!e.alive) continue;
+      if (Math.hypot(e.x - x, e.y - y) <= range) candidates.push(e);
+    }
+    return this.pickEnemyFrom(x, y, candidates);
+  }
+
+  /** Path progress: waypoint index + fraction toward next waypoint (0..1). */
+  private enemyProgress(e: EnemyActor): number {
+    const next = this.waypoints[e.wp + 1];
+    if (!next) return e.wp + 1;
+    const prev = this.waypoints[e.wp];
+    if (!prev) return e.wp;
+    const seg = Math.hypot(next.x - prev.x, next.y - prev.y) || 1;
+    const toNext = Math.hypot(next.x - e.x, next.y - e.y);
+    const along = Math.max(0, Math.min(1, 1 - toNext / seg));
+    return e.wp + along;
+  }
+
+  private pickEnemyFrom(x: number, y: number, candidates: EnemyActor[]): EnemyActor | null {
+    if (candidates.length === 0) return null;
+    let best: EnemyActor | null = null;
+    let bestDist = Infinity;
+    let bestProgress = -Infinity;
+    let bestHp = -Infinity;
+    for (const e of candidates) {
       const d = Math.hypot(e.x - x, e.y - y);
-      if (d <= bestD) {
-        bestD = d;
+      if (this.targetMode === 'closest') {
+        if (!best || d < bestDist) {
+          best = e;
+          bestDist = d;
+        }
+        continue;
+      }
+      if (this.targetMode === 'strong') {
+        const hp = e.hp;
+        if (!best || hp > bestHp || (hp === bestHp && d < bestDist)) {
+          best = e;
+          bestHp = hp;
+          bestDist = d;
+        }
+        continue;
+      }
+      // first — furthest along path; tie-break higher progress / closer to next wp, then closer
+      const prog = this.enemyProgress(e);
+      if (
+        !best ||
+        prog > bestProgress ||
+        (prog === bestProgress && d < bestDist)
+      ) {
         best = e;
+        bestProgress = prog;
+        bestDist = d;
       }
     }
     return best;
