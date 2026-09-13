@@ -34,6 +34,8 @@ export interface GameStateSnapshot {
   lightningDmgLevel: number;
   /** 0–3: +5 sniper tower damage per level. */
   sniperDmgLevel: number;
+  /** 0–3: +4 mortar tower damage per level. */
+  mortarDmgLevel: number;
   /** Music bus enabled (persisted). */
   musicOn: boolean;
   /** SFX + UI buses enabled (persisted). */
@@ -52,7 +54,8 @@ export const START_GOLD_COSTS = [40, 80, 140] as const;
 export const ARROW_DMG_COSTS = [50, 100, 160] as const;
 export const CANNON_DMG_COSTS = [55, 110, 180] as const;
 export const FROST_DMG_COSTS = [45, 90, 150] as const;
-export const SNIPER_DMG_COSTS = [70, 140, 220] as const;
+export const MORTAR_DMG_COSTS = [75, 150, 240] as const;
+const SNIPER_DMG_COSTS = [70, 140, 220] as const;
 const LIGHTNING_DMG_COSTS = [50, 100, 165] as const;
 
 const DEFAULT: GameStateSnapshot = {
@@ -74,6 +77,7 @@ const DEFAULT: GameStateSnapshot = {
   frostDmgLevel: 0,
   lightningDmgLevel: 0,
   sniperDmgLevel: 0,
+  mortarDmgLevel: 0,
   musicOn: true,
   sfxOn: true,
   tutorialDone: false,
@@ -104,6 +108,7 @@ class GameStateImpl {
   frostDmgLevel = DEFAULT.frostDmgLevel;
   lightningDmgLevel = DEFAULT.lightningDmgLevel;
   sniperDmgLevel = DEFAULT.sniperDmgLevel;
+  mortarDmgLevel = DEFAULT.mortarDmgLevel;
   musicOn = DEFAULT.musicOn;
   sfxOn = DEFAULT.sfxOn;
   tutorialDone = DEFAULT.tutorialDone;
@@ -137,6 +142,7 @@ class GameStateImpl {
     this.frostDmgLevel = clampUpgrade(snapshot.frostDmgLevel);
     this.lightningDmgLevel = clampUpgrade(snapshot.lightningDmgLevel);
     this.sniperDmgLevel = clampUpgrade(snapshot.sniperDmgLevel);
+    this.mortarDmgLevel = clampUpgrade(snapshot.mortarDmgLevel);
     this.musicOn = snapshot.musicOn !== false;
     this.sfxOn = snapshot.sfxOn !== false;
     this.tutorialDone = snapshot.tutorialDone === true;
@@ -163,6 +169,7 @@ class GameStateImpl {
       frostDmgLevel: this.frostDmgLevel,
       lightningDmgLevel: this.lightningDmgLevel,
       sniperDmgLevel: this.sniperDmgLevel,
+      mortarDmgLevel: this.mortarDmgLevel,
       musicOn: this.musicOn,
       sfxOn: this.sfxOn,
       tutorialDone: this.tutorialDone,
@@ -259,6 +266,28 @@ class GameStateImpl {
 
   sniperDamageBonus(): number {
     return this.sniperDmgLevel * 5;
+  }
+
+
+  mortarDmgNextCost(): number | null {
+    if (this.mortarDmgLevel >= MAX_UPGRADE) return null;
+    return MORTAR_DMG_COSTS[this.mortarDmgLevel] ?? null;
+  }
+
+  buyMortarDmg(): boolean {
+    const cost = this.mortarDmgNextCost();
+    if (cost === null || this.metaGold < cost) return false;
+    this.metaGold -= cost;
+    this.mortarDmgLevel += 1;
+    return true;
+  }
+
+  mortarDamageBonus(): number {
+    return this.mortarDmgLevel * 4;
+  }
+
+  isMortarUnlocked(): boolean {
+    return this.map04Stars >= 1;
   }
 
   isSniperUnlocked(): boolean {

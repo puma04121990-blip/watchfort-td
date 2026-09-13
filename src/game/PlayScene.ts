@@ -125,7 +125,7 @@ function starString(n: number): string {
   return '★'.repeat(filled);
 }
 
-const HUD_KINDS: TowerKind[] = ['arrow', 'cannon', 'frost', 'lightning', 'sniper', 'barracks'];
+const HUD_KINDS: TowerKind[] = ['arrow', 'cannon', 'frost', 'lightning', 'sniper', 'mortar', 'barracks'];
 
 
 const SOLDIER_MELEE_MS = 400;
@@ -428,27 +428,28 @@ export class PlayScene extends Phaser.Scene {
       .setDepth(110);
 
     HUD_KINDS.forEach((kind, i) => {
-      const x = 42 + i * 82;
+      const x = 34 + i * 70;
       const y = y0 + HUD_H / 2;
       const locked =
         (kind === 'barracks' && !GameState.isBarracksUnlocked()) ||
         (kind === 'lightning' && !GameState.isLightningUnlocked()) ||
-        (kind === 'sniper' && !GameState.isSniperUnlocked());
+        (kind === 'sniper' && !GameState.isSniperUnlocked()) ||
+        (kind === 'mortar' && !GameState.isMortarUnlocked());
       const mark = this.add
-        .rectangle(x, y, 78, 70, 0x162033)
+        .rectangle(x, y, 66, 68, 0x162033)
         .setStrokeStyle(3, this.selected === kind ? COLOR.gold : 0x4b5568)
         .setDepth(102)
         .setInteractive({ useHandCursor: !locked })
         .setAlpha(locked ? 0.5 : 1);
       this.selectMarks.push(mark);
       const icon = this.add
-        .image(x - 22, y, TOWERS[kind].texture)
-        .setDisplaySize(30, 30)
+        .image(x - 18, y, TOWERS[kind].texture)
+        .setDisplaySize(26, 26)
         .setDepth(103);
       if (locked) icon.setTint(0x667066);
       this.selectIcons.push(icon);
       this.add
-        .text(x + 10, y - 12, t(`tower.${kind}`), {
+        .text(x + 8, y - 12, t(`tower.${kind}`), {
           fontFamily: 'system-ui, sans-serif',
           fontSize: '11px',
           color: locked ? '#9CA3AF' : '#F3F4F6',
@@ -456,7 +457,7 @@ export class PlayScene extends Phaser.Scene {
         .setOrigin(0.5)
         .setDepth(103);
       this.add
-        .text(x + 10, y + 10, locked ? t('menu.locked') : `${TOWERS[kind].cost}`, {
+        .text(x + 8, y + 10, locked ? t('menu.locked') : `${TOWERS[kind].cost}`, {
           fontFamily: 'system-ui, sans-serif',
           fontSize: '11px',
           color: locked ? '#9CA3AF' : '#E8B84A',
@@ -468,7 +469,8 @@ export class PlayScene extends Phaser.Scene {
         if (
           (kind === 'barracks' && !GameState.isBarracksUnlocked()) ||
           (kind === 'lightning' && !GameState.isLightningUnlocked()) ||
-          (kind === 'sniper' && !GameState.isSniperUnlocked())
+          (kind === 'sniper' && !GameState.isSniperUnlocked()) ||
+          (kind === 'mortar' && !GameState.isMortarUnlocked())
         ) {
           AudioBus.playUi('error');
           return;
@@ -597,7 +599,8 @@ export class PlayScene extends Phaser.Scene {
       const locked =
         (kind === 'barracks' && !GameState.isBarracksUnlocked()) ||
         (kind === 'lightning' && !GameState.isLightningUnlocked()) ||
-        (kind === 'sniper' && !GameState.isSniperUnlocked());
+        (kind === 'sniper' && !GameState.isSniperUnlocked()) ||
+        (kind === 'mortar' && !GameState.isMortarUnlocked());
       mark.setStrokeStyle(3, this.selected === kind ? COLOR.gold : 0x4b5568);
       mark.setAlpha(locked ? 0.5 : 1);
       const icon = this.selectIcons[i];
@@ -805,6 +808,10 @@ export class PlayScene extends Phaser.Scene {
       tw.def.damage += 12;
       tw.def.range += 10;
     }
+    if (tw.kind === 'mortar') {
+      tw.def.damage += 10;
+      tw.def.splash += 12;
+    }
     if (tw.kind === 'barracks') {
       tw.def.soldierHp = Math.floor(tw.def.soldierHp * 1.4);
       if (tw.soldier?.alive) {
@@ -856,7 +863,8 @@ export class PlayScene extends Phaser.Scene {
     if (
       (this.selected === 'barracks' && !GameState.isBarracksUnlocked()) ||
       (this.selected === 'lightning' && !GameState.isLightningUnlocked()) ||
-      (this.selected === 'sniper' && !GameState.isSniperUnlocked())
+      (this.selected === 'sniper' && !GameState.isSniperUnlocked()) ||
+      (this.selected === 'mortar' && !GameState.isMortarUnlocked())
     ) {
       AudioBus.playUi('error');
       return;
@@ -886,6 +894,8 @@ export class PlayScene extends Phaser.Scene {
       def.damage += GameState.lightningDamageBonus();
     } else if (this.selected === 'sniper') {
       def.damage += GameState.sniperDamageBonus();
+    } else if (this.selected === 'mortar') {
+      def.damage += GameState.mortarDamageBonus();
     }
     const { x, y } = cellCenter(c, r);
     const shadow = contactShadow(this, x, y + 22, 40, 14, 4);
@@ -1370,6 +1380,7 @@ export class PlayScene extends Phaser.Scene {
     if (def.kind === 'arrow') AudioBus.playSfx('shot_arrow');
     else if (def.kind === 'cannon') AudioBus.playSfx('shot_cannon');
     else if (def.kind === 'sniper') AudioBus.playSfx('shot_sniper');
+    else if (def.kind === 'mortar') AudioBus.playSfx('shot_mortar');
     else AudioBus.playSfx('shot_frost');
   }
 

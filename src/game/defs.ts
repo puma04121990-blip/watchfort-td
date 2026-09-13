@@ -15,6 +15,7 @@ export const COLOR = {
   barracks: 0x3d9b6e,
   lightning: 0xa855f7,
   sniper: 0xf59e0b,
+  mortar: 0x92400e,
   splitter: 0x7bc67e,
   armored: 0xb45309,
   enemyRed: 0xd64545,
@@ -24,7 +25,7 @@ export const COLOR = {
   shade: 0x1f2933,
 } as const;
 
-export type TowerKind = 'arrow' | 'cannon' | 'frost' | 'lightning' | 'sniper' | 'barracks';
+export type TowerKind = 'arrow' | 'cannon' | 'frost' | 'lightning' | 'sniper' | 'mortar' | 'barracks';
 export type EnemyKind = 'runner' | 'tank' | 'brute' | 'swarm' | 'shaman' | 'splitter' | 'armored';
 
 export interface TowerDef {
@@ -136,6 +137,22 @@ export const TOWERS: Record<TowerKind, TowerDef> = {
     projectileKey: 'projectile_sniper',
     projectileSpeed: 620,
     texture: 'tower_sniper',
+    soldierHp: 0,
+    chainHops: 0,
+    chainRange: 0,
+  },
+  mortar: {
+    kind: 'mortar',
+    cost: 125,
+    damage: 36,
+    range: 185,
+    cooldown: 2200,
+    splash: 95,
+    slowFactor: 1,
+    slowMs: 0,
+    projectileKey: 'projectile_mortar',
+    projectileSpeed: 280,
+    texture: 'tower_mortar',
     soldierHp: 0,
     chainHops: 0,
     chainRange: 0,

@@ -212,6 +212,16 @@ def gen_shot_cannon() -> np.ndarray:
 
 
 
+
+def gen_shot_mortar() -> np.ndarray:
+    dur = 0.22
+    n = int(SR * dur)
+    t = np.arange(n) / SR
+    thump = soft_square(t, np.linspace(90, 45, n), 0.7) * env_adsr(n, 0.002, 0.04, 0.05, 0.1, 0.5)
+    whoosh = highpass(noise(n), 800) * env_adsr(n, 0.01, 0.08, 0.05, 0.08, 0.35)
+    boom = soft_square(t, np.linspace(180, 60, n), 0.5) * env_adsr(n, 0.02, 0.05, 0.04, 0.1, 0.4)
+    return normalize((thump * 0.7 + whoosh * 0.45 + boom * 0.5) * env_adsr(n, 0.002, 0.05, 0.08, 0.1, 0.55))
+
 def gen_shot_sniper() -> np.ndarray:
     dur = 0.14
     n = int(SR * dur)
@@ -437,6 +447,7 @@ CLIPS = {
     "shot_frost": gen_shot_frost,
     "shot_lightning": gen_shot_lightning,
     "shot_sniper": gen_shot_sniper,
+    "shot_mortar": gen_shot_mortar,
     "hit": gen_hit,
     "die": gen_die,
     "coin": gen_coin,
