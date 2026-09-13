@@ -1,0 +1,623 @@
+import Phaser from 'phaser';
+import { t } from '../i18n';
+import { GameState } from '../state/GameState';
+import { AudioBus } from '../audio/AudioBus';
+import { hookLevelComplete, hookLevelFail } from '../platform/hooks';
+import {
+  TILE,
+  COLS,
+  ROWS,
+  HUD_H,
+  GAME_W,
+  GAME_H,
+  TOTAL_WAVES,
+  COLOR,
+  PATH,
+  TOWERS,
+  ENEMIES,
+  WAVES,
+  GATE_CELL,
+  isPath,
+  isPlaceableGrass,
+  cellCenter,
+  isInGrid,
+  type TowerKind,
+  type EnemyKind,
+  type TowerDef,
+} from './defs';
+
+interface EnemyActor {
+  id: number;
+  kind: EnemyKind;
+  sprite: Phaser.GameObjects.Image;
+  hpBg: Phaser.GameObjects.Rectangle;
+  hpFg: Phaser.GameObjects.Rectangle;
+  hp: number;
+  maxHp: number;
+  speed: number;
+  gold: number;
+  wp: number;
+  x: number;
+  y: number;
+  slowUntil: number;
+  slowFactor: number;
+  alive: boolean;
+}
+
+interface TowerActor {
+  col: number;
+  row: number;
+  def: TowerDef;
+  sprite: Phaser.GameObjects.Image;
+  lastShot: number;
+}
+
+interface ShotActor {
+  sprite: Phaser.GameObjects.Image;
+  x: number;
+  y: number;
+  vx: number;
+  vy: number;
+  damage: number;
+  splash: number;
+  slowFactor: number;
+  slowMs: number;
+  targetId: number;
+  spent: boolean;
+}
+
+interface PendingSpawn {
+  kind: EnemyKind;
+  at: number;
+}
+
+export class PlayScene extends Phaser.Scene {
+  private selected: TowerKind = 'arrow';
+  private occupied = new Set<string>();
+  private towers: TowerActor[] = [];
+  private enemies: EnemyActor[] = [];
+  private shots: ShotActor[] = [];
+  private pending: PendingSpawn[] = [];
+  private waypoints: { x: number; y: number }[] = [];
+  private waveLive = false;
+  private ended = false;
+  private nextId = 1;
+  private goldText!: Phaser.GameObjects.Text;
+  private gateText!: Phaser.GameObjects.Text;
+  private waveText!: Phaser.GameObjects.Text;
+  private startLabel!: Phaser.GameObjects.Text;
+  private startBg!: Phaser.GameObjects.Rectangle;
+  private rangeGfx!: Phaser.GameObjects.Graphics;
+  private selectMarks: Phaser.GameObjects.Rectangle[] = [];
+  private hoverCol = -1;
+  private hoverRow = -1;
+
+  constructor() {
+    super({ key: 'PlayScene' });
+  }
+
+  create(): void {
+    GameState.resetRun();
+    this.selected = 'arrow';
+    this.occupied = new Set();
+    this.towers = [];
+    this.enemies = [];
+    this.shots = [];
+    this.pending = [];
+    this.waveLive = false;
+    this.ended = false;
+    this.nextId = 1;
+    this.hoverCol = -1;
+    this.hoverRow = -1;
+    this.selectMarks = [];
+
+    AudioBus.playMusic('play');
+    this.cameras.main.setBackgroundColor(`#${COLOR.shade.toString(16).padStart(6, '0')}`);
+
+    this.waypoints = PATH.map((p) => cellCenter(p.c, p.r));
+    this.drawField();
+    this.rangeGfx = this.add.graphics().setDepth(3);
+    this.buildHud();
+
+    this.input.on('pointermove', (p: Phaser.Input.Pointer) => {
+      if (this.ended || p.y >= ROWS * TILE) {
+        this.hoverCol = -1;
+        this.hoverRow = -1;
+        this.redrawRange();
+        return;
+      }
+      this.hoverCol = Math.floor(p.x / TILE);
+      this.hoverRow = Math.floor(p.y / TILE);
+      this.redrawRange();
+    });
+
+    this.input.on('pointerdown', (p: Phaser.Input.Pointer) => {
+      if (this.ended) {
+        this.scene.start('MenuScene');
+        return;
+      }
+      if (p.y >= ROWS * TILE) return;
+      const c = Math.floor(p.x / TILE);
+      const r = Math.floor(p.y / TILE);
+      this.tryPlace(c, r);
+    });
+  }
+
+  update(_time: number, delta: number): void {
+    if (this.ended) return;
+    const now = this.time.now;
+    this.spawnDue(now);
+    this.stepEnemies(delta, now);
+    this.stepTowers(now);
+    this.stepShots(delta);
+    this.refreshHud();
+    this.checkWaveEnd();
+  }
+
+  private drawField(): void {
+    for (let r = 0; r < ROWS; r++) {
+      for (let c = 0; c < COLS; c++) {
+        const { x, y } = cellCenter(c, r);
+        const key = isPath(c, r) ? 'tile_path' : 'tile_grass';
+        this.add.image(x, y, key).setDisplaySize(TILE, TILE).setDepth(0);
+      }
+    }
+    const gate = cellCenter(GATE_CELL.c, GATE_CELL.r);
+    this.add.image(gate.x, gate.y, 'tile_gate').setDisplaySize(TILE, TILE).setDepth(2);
+  }
+
+  private buildHud(): void {
+    const y0 = ROWS * TILE;
+    this.add.rectangle(GAME_W / 2, y0 + HUD_H / 2, GAME_W, HUD_H, COLOR.panel).setDepth(100);
+    this.add.rectangle(GAME_W / 2, y0 + 1, GAME_W, 2, COLOR.shade).setDepth(101);
+
+    this.goldText = this.add
+      .text(16, 10, '', {
+        fontFamily: 'system-ui, sans-serif',
+        fontSize: '16px',
+        color: '#E8B84A',
+        backgroundColor: '#111827',
+        padding: { x: 8, y: 4 },
+      })
+      .setDepth(110);
+
+    this.gateText = this.add
+      .text(GAME_W / 2, 10, '', {
+        fontFamily: 'system-ui, sans-serif',
+        fontSize: '16px',
+        color: '#F3F4F6',
+        backgroundColor: '#111827',
+        padding: { x: 8, y: 4 },
+      })
+      .setOrigin(0.5, 0)
+      .setDepth(110);
+
+    this.waveText = this.add
+      .text(GAME_W - 16, 10, '', {
+        fontFamily: 'system-ui, sans-serif',
+        fontSize: '16px',
+        color: '#F3F4F6',
+        backgroundColor: '#111827',
+        padding: { x: 8, y: 4 },
+      })
+      .setOrigin(1, 0)
+      .setDepth(110);
+
+    this.add
+      .text(16, 38, t('play.hint'), {
+        fontFamily: 'system-ui, sans-serif',
+        fontSize: '12px',
+        color: '#F3F4F6',
+      })
+      .setAlpha(0.75)
+      .setDepth(110);
+
+    const kinds: TowerKind[] = ['arrow', 'cannon', 'frost'];
+    const labels: Record<TowerKind, string> = {
+      arrow: t('tower.arrow'),
+      cannon: t('tower.cannon'),
+      frost: t('tower.frost'),
+    };
+    const colors: Record<TowerKind, number> = {
+      arrow: COLOR.towerBlue,
+      cannon: COLOR.cannon,
+      frost: COLOR.frost,
+    };
+
+    kinds.forEach((kind, i) => {
+      const x = 70 + i * 150;
+      const y = y0 + HUD_H / 2;
+      const mark = this.add
+        .rectangle(x, y, 136, 68, COLOR.shade)
+        .setStrokeStyle(2, this.selected === kind ? colors[kind] : 0x374151)
+        .setDepth(102)
+        .setInteractive({ useHandCursor: true });
+      this.selectMarks.push(mark);
+      this.add.image(x - 40, y, TOWERS[kind].texture).setDisplaySize(40, 40).setDepth(103);
+      this.add
+        .text(x + 12, y - 12, labels[kind], {
+          fontFamily: 'system-ui, sans-serif',
+          fontSize: '14px',
+          color: '#F3F4F6',
+        })
+        .setOrigin(0.5)
+        .setDepth(103);
+      this.add
+        .text(x + 12, y + 10, `${TOWERS[kind].cost}`, {
+          fontFamily: 'system-ui, sans-serif',
+          fontSize: '13px',
+          color: '#E8B84A',
+        })
+        .setOrigin(0.5)
+        .setDepth(103);
+      mark.on('pointerdown', () => {
+        this.selected = kind;
+        AudioBus.playUi('click');
+        this.refreshSelect();
+      });
+    });
+
+    this.startBg = this.add
+      .rectangle(GAME_W - 110, y0 + HUD_H / 2, 180, 56, COLOR.towerBlue)
+      .setStrokeStyle(2, COLOR.gold)
+      .setDepth(102)
+      .setInteractive({ useHandCursor: true });
+    this.startLabel = this.add
+      .text(GAME_W - 110, y0 + HUD_H / 2, t('play.startWave'), {
+        fontFamily: 'system-ui, sans-serif',
+        fontSize: '16px',
+        color: '#F3F4F6',
+      })
+      .setOrigin(0.5)
+      .setDepth(103);
+    this.startBg.on('pointerdown', () => {
+      this.tryStartWave();
+    });
+
+    this.refreshHud();
+    this.refreshSelect();
+  }
+
+  private refreshSelect(): void {
+    const colors: Record<TowerKind, number> = {
+      arrow: COLOR.towerBlue,
+      cannon: COLOR.cannon,
+      frost: COLOR.frost,
+    };
+    const kinds: TowerKind[] = ['arrow', 'cannon', 'frost'];
+    this.selectMarks.forEach((mark, i) => {
+      const kind = kinds[i];
+      if (!kind) return;
+      mark.setStrokeStyle(3, this.selected === kind ? colors[kind] : 0x374151);
+    });
+    this.redrawRange();
+  }
+
+  private refreshHud(): void {
+    this.goldText.setText(`${t('play.gold')}: ${GameState.coins}`);
+    this.gateText.setText(`${t('play.gate')}: ${GameState.gateHp}/${GameState.maxGateHp}`);
+    const shown = Math.min(Math.max(GameState.wave, 0), TOTAL_WAVES);
+    const phase = this.waveLive ? `${shown}/${TOTAL_WAVES}` : `${shown}/${TOTAL_WAVES} · ${t('play.waiting')}`;
+    this.waveText.setText(`${t('play.wave')}: ${phase}`);
+    const canStart = !this.waveLive && GameState.wave < TOTAL_WAVES;
+    this.startBg.setFillStyle(canStart ? COLOR.towerBlue : COLOR.shade);
+    this.startBg.setAlpha(canStart ? 1 : 0.55);
+    this.startLabel.setText(canStart ? t('play.startWave') : t('play.waiting'));
+  }
+
+  private redrawRange(): void {
+    this.rangeGfx.clear();
+    if (this.ended) return;
+    const c = this.hoverCol;
+    const r = this.hoverRow;
+    if (!isInGrid(c, r)) return;
+    const key = `${c},${r}`;
+    const ok = isPlaceableGrass(c, r) && !this.occupied.has(key);
+    const { x, y } = cellCenter(c, r);
+    const def = TOWERS[this.selected];
+    this.rangeGfx.fillStyle(ok ? COLOR.towerBlue : COLOR.enemyRed, 0.12);
+    this.rangeGfx.fillCircle(x, y, def.range);
+    this.rangeGfx.lineStyle(1, ok ? COLOR.gold : COLOR.enemyRed, 0.55);
+    this.rangeGfx.strokeCircle(x, y, def.range);
+    this.rangeGfx.lineStyle(2, ok ? COLOR.gold : COLOR.enemyRed, 0.7);
+    this.rangeGfx.strokeRect(c * TILE + 2, r * TILE + 2, TILE - 4, TILE - 4);
+  }
+
+  private tryPlace(c: number, r: number): void {
+    const key = `${c},${r}`;
+    if (!isPlaceableGrass(c, r) || this.occupied.has(key)) {
+      AudioBus.playUi('error');
+      return;
+    }
+    const def = TOWERS[this.selected];
+    if (!GameState.spend(def.cost)) {
+      AudioBus.playUi('error');
+      this.goldText.setColor('#D64545');
+      this.time.delayedCall(220, () => {
+        this.goldText.setColor('#E8B84A');
+      });
+      return;
+    }
+    const { x, y } = cellCenter(c, r);
+    const sprite = this.add.image(x, y, def.texture).setDisplaySize(52, 52).setDepth(5);
+    this.towers.push({ col: c, row: r, def, sprite, lastShot: 0 });
+    this.occupied.add(key);
+    AudioBus.playSfx('place');
+    this.refreshHud();
+  }
+
+  private tryStartWave(): void {
+    if (this.ended || this.waveLive || GameState.wave >= TOTAL_WAVES) {
+      AudioBus.playUi('error');
+      return;
+    }
+    GameState.wave += 1;
+    this.waveLive = true;
+    this.queueWave(GameState.wave);
+    AudioBus.playSfx('start');
+    AudioBus.playUi('confirm');
+    this.refreshHud();
+  }
+
+  private queueWave(waveNum: number): void {
+    const plan = WAVES[waveNum - 1];
+    if (!plan) return;
+    const t0 = this.time.now;
+    for (const group of plan) {
+      for (let i = 0; i < group.count; i++) {
+        this.pending.push({ kind: group.kind, at: t0 + group.delay + i * group.interval });
+      }
+    }
+  }
+
+  private spawnDue(now: number): void {
+    if (this.pending.length === 0) return;
+    const remain: PendingSpawn[] = [];
+    for (const item of this.pending) {
+      if (item.at <= now) this.spawnEnemy(item.kind);
+      else remain.push(item);
+    }
+    this.pending = remain;
+  }
+
+  private spawnEnemy(kind: EnemyKind): void {
+    const def = ENEMIES[kind];
+    const start = this.waypoints[0];
+    if (!start) return;
+    const sprite = this.add.image(start.x, start.y, def.texture).setDepth(8);
+    if (kind === 'runner') sprite.setDisplaySize(36, 36);
+    else if (kind === 'tank') sprite.setDisplaySize(42, 42);
+    else sprite.setDisplaySize(50, 50);
+    const hpBg = this.add.rectangle(start.x, start.y - 22, 28, 4, COLOR.shade).setDepth(11);
+    const hpFg = this.add.rectangle(start.x, start.y - 22, 28, 4, COLOR.gold).setDepth(12);
+    this.enemies.push({
+      id: this.nextId++,
+      kind,
+      sprite,
+      hpBg,
+      hpFg,
+      hp: def.hp,
+      maxHp: def.hp,
+      speed: def.speed,
+      gold: def.gold,
+      wp: 0,
+      x: start.x,
+      y: start.y,
+      slowUntil: 0,
+      slowFactor: 1,
+      alive: true,
+    });
+  }
+
+  private stepEnemies(delta: number, now: number): void {
+    const dt = delta / 1000;
+    for (const e of this.enemies) {
+      if (!e.alive) continue;
+      const factor = now < e.slowUntil ? e.slowFactor : 1;
+      let budget = e.speed * factor * dt;
+      while (budget > 0 && e.wp < this.waypoints.length - 1) {
+        const next = this.waypoints[e.wp + 1];
+        if (!next) break;
+        const dx = next.x - e.x;
+        const dy = next.y - e.y;
+        const dist = Math.hypot(dx, dy);
+        if (dist <= budget || dist < 0.5) {
+          e.x = next.x;
+          e.y = next.y;
+          e.wp += 1;
+          budget -= dist;
+        } else {
+          e.x += (dx / dist) * budget;
+          e.y += (dy / dist) * budget;
+          budget = 0;
+        }
+      }
+      e.sprite.setPosition(e.x, e.y);
+      e.hpBg.setPosition(e.x, e.y - 22);
+      e.hpFg.setPosition(e.x, e.y - 22);
+      e.hpFg.width = Math.max(1, 28 * (e.hp / e.maxHp));
+      if (e.wp >= this.waypoints.length - 1) {
+        this.leak(e);
+      }
+    }
+    this.enemies = this.enemies.filter((e) => e.alive);
+  }
+
+  private leak(e: EnemyActor): void {
+    e.alive = false;
+    e.sprite.destroy();
+    e.hpBg.destroy();
+    e.hpFg.destroy();
+    AudioBus.playSfx('gate');
+    const dead = GameState.hitGate(1);
+    this.refreshHud();
+    if (dead) this.fail();
+  }
+
+  private stepTowers(now: number): void {
+    for (const tw of this.towers) {
+      if (now - tw.lastShot < tw.def.cooldown) continue;
+      const pos = cellCenter(tw.col, tw.row);
+      const target = this.nearestEnemy(pos.x, pos.y, tw.def.range);
+      if (!target) continue;
+      tw.lastShot = now;
+      this.fire(tw, target, pos.x, pos.y);
+    }
+  }
+
+  private nearestEnemy(x: number, y: number, range: number): EnemyActor | null {
+    let best: EnemyActor | null = null;
+    let bestD = range;
+    for (const e of this.enemies) {
+      if (!e.alive) continue;
+      const d = Math.hypot(e.x - x, e.y - y);
+      if (d <= bestD) {
+        bestD = d;
+        best = e;
+      }
+    }
+    return best;
+  }
+
+  private fire(tw: TowerActor, target: EnemyActor, x: number, y: number): void {
+    const def = tw.def;
+    const dx = target.x - x;
+    const dy = target.y - y;
+    const dist = Math.hypot(dx, dy) || 1;
+    const sprite = this.add.image(x, y, def.projectileKey).setDepth(10);
+    sprite.setRotation(Math.atan2(dy, dx));
+    this.shots.push({
+      sprite,
+      x,
+      y,
+      vx: (dx / dist) * def.projectileSpeed,
+      vy: (dy / dist) * def.projectileSpeed,
+      damage: def.damage,
+      splash: def.splash,
+      slowFactor: def.slowFactor,
+      slowMs: def.slowMs,
+      targetId: target.id,
+      spent: false,
+    });
+    if (def.kind === 'arrow') AudioBus.playSfx('shot_arrow');
+    else if (def.kind === 'cannon') AudioBus.playSfx('shot_cannon');
+    else AudioBus.playSfx('shot_frost');
+  }
+
+  private stepShots(delta: number): void {
+    const dt = delta / 1000;
+    for (const s of this.shots) {
+      if (s.spent) continue;
+      const tgt = this.enemies.find((e) => e.alive && e.id === s.targetId);
+      if (tgt) {
+        const dx = tgt.x - s.x;
+        const dy = tgt.y - s.y;
+        const dist = Math.hypot(dx, dy) || 1;
+        const spd = Math.hypot(s.vx, s.vy);
+        s.vx = (dx / dist) * spd;
+        s.vy = (dy / dist) * spd;
+        s.sprite.setRotation(Math.atan2(dy, dx));
+        if (dist < 16) {
+          this.impact(s, tgt.x, tgt.y);
+          continue;
+        }
+      }
+      s.x += s.vx * dt;
+      s.y += s.vy * dt;
+      s.sprite.setPosition(s.x, s.y);
+      if (s.x < -40 || s.y < -40 || s.x > GAME_W + 40 || s.y > GAME_H + 40) {
+        s.spent = true;
+        s.sprite.destroy();
+      }
+    }
+    this.shots = this.shots.filter((s) => !s.spent);
+  }
+
+  private impact(s: ShotActor, ix: number, iy: number): void {
+    s.spent = true;
+    s.sprite.destroy();
+    AudioBus.playSfx('hit');
+    const fx = this.add.image(ix, iy, 'fx_hit').setDepth(13);
+    this.time.delayedCall(80, () => {
+      fx.destroy();
+    });
+    if (s.splash > 0) {
+      for (const e of this.enemies) {
+        if (!e.alive) continue;
+        if (Math.hypot(e.x - ix, e.y - iy) <= s.splash) {
+          this.hurt(e, s.damage, s.slowFactor, s.slowMs);
+        }
+      }
+    } else {
+      const tgt = this.enemies.find((e) => e.alive && e.id === s.targetId);
+      if (tgt) this.hurt(tgt, s.damage, s.slowFactor, s.slowMs);
+    }
+  }
+
+  private hurt(e: EnemyActor, dmg: number, slowFactor: number, slowMs: number): void {
+    if (!e.alive) return;
+    e.hp -= dmg;
+    if (slowMs > 0) {
+      e.slowUntil = this.time.now + slowMs;
+      e.slowFactor = slowFactor;
+    }
+    if (e.hp <= 0) {
+      e.alive = false;
+      e.sprite.destroy();
+      e.hpBg.destroy();
+      e.hpFg.destroy();
+      GameState.addCoins(e.gold);
+      AudioBus.playSfx('die');
+      AudioBus.playSfx('coin');
+      this.refreshHud();
+    }
+  }
+
+  private checkWaveEnd(): void {
+    if (!this.waveLive || this.ended) return;
+    if (this.pending.length > 0) return;
+    if (this.enemies.some((e) => e.alive)) return;
+    this.waveLive = false;
+    this.refreshHud();
+    if (GameState.wave >= TOTAL_WAVES && GameState.gateHp > 0) {
+      this.win();
+    }
+  }
+
+  private win(): void {
+    if (this.ended) return;
+    this.ended = true;
+    hookLevelComplete();
+    this.showBanner(t('play.win'), true);
+  }
+
+  private fail(): void {
+    if (this.ended) return;
+    this.ended = true;
+    this.waveLive = false;
+    this.pending = [];
+    hookLevelFail();
+    this.showBanner(t('play.fail'), false);
+  }
+
+  private showBanner(title: string, victory: boolean): void {
+    this.add.rectangle(GAME_W / 2, GAME_H / 2, GAME_W, GAME_H, COLOR.panel, 0.72).setDepth(200);
+    this.add
+      .text(GAME_W / 2, GAME_H / 2 - 20, title, {
+        fontFamily: 'system-ui, sans-serif',
+        fontSize: '36px',
+        color: victory ? '#E8B84A' : '#D64545',
+        fontStyle: 'bold',
+      })
+      .setOrigin(0.5)
+      .setDepth(201);
+    this.add
+      .text(GAME_W / 2, GAME_H / 2 + 28, t('play.tapMenu'), {
+        fontFamily: 'system-ui, sans-serif',
+        fontSize: '16px',
+        color: '#F3F4F6',
+      })
+      .setOrigin(0.5)
+      .setDepth(201);
+  }
+}
