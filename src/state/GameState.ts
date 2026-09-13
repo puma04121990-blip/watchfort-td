@@ -1,4 +1,4 @@
-export type MapId = 'map01' | 'map02';
+export type MapId = 'map01' | 'map02' | 'map03';
 
 export interface GameStateSnapshot {
   coins: number;
@@ -10,12 +10,16 @@ export interface GameStateSnapshot {
   map01Stars: number;
   /** Best star rating for map02 (0–3). */
   map02Stars: number;
+  /** Best star rating for map03 (0–3). */
+  map03Stars: number;
   /** Persistent meta currency for menu upgrades. */
   metaGold: number;
   /** 0–3: +20 starting run coins per level. */
   startGoldLevel: number;
   /** 0–3: +3 arrow tower damage per level. */
   arrowDmgLevel: number;
+  /** 0–3: +4 cannon tower damage per level. */
+  cannonDmgLevel: number;
 }
 
 const RUN_COINS = 120;
@@ -24,6 +28,7 @@ const MAX_UPGRADE = 3;
 
 export const START_GOLD_COSTS = [40, 80, 140] as const;
 export const ARROW_DMG_COSTS = [50, 100, 160] as const;
+export const CANNON_DMG_COSTS = [55, 110, 180] as const;
 
 const DEFAULT: GameStateSnapshot = {
   coins: RUN_COINS,
@@ -33,9 +38,11 @@ const DEFAULT: GameStateSnapshot = {
   wins: 0,
   map01Stars: 0,
   map02Stars: 0,
+  map03Stars: 0,
   metaGold: 0,
   startGoldLevel: 0,
   arrowDmgLevel: 0,
+  cannonDmgLevel: 0,
 };
 
 function clampUpgrade(level: number): number {
@@ -51,9 +58,11 @@ class GameStateImpl {
   wins = DEFAULT.wins;
   map01Stars = DEFAULT.map01Stars;
   map02Stars = DEFAULT.map02Stars;
+  map03Stars = DEFAULT.map03Stars;
   metaGold = DEFAULT.metaGold;
   startGoldLevel = DEFAULT.startGoldLevel;
   arrowDmgLevel = DEFAULT.arrowDmgLevel;
+  cannonDmgLevel = DEFAULT.cannonDmgLevel;
   /** Currently selected map for the next / active run (not persisted). */
   selectedMapId: MapId = 'map01';
 
@@ -71,9 +80,11 @@ class GameStateImpl {
     this.wins = snapshot.wins;
     this.map01Stars = snapshot.map01Stars;
     this.map02Stars = snapshot.map02Stars;
+    this.map03Stars = snapshot.map03Stars;
     this.metaGold = snapshot.metaGold;
     this.startGoldLevel = clampUpgrade(snapshot.startGoldLevel);
     this.arrowDmgLevel = clampUpgrade(snapshot.arrowDmgLevel);
+    this.cannonDmgLevel = clampUpgrade(snapshot.cannonDmgLevel);
   }
 
   snapshot(): GameStateSnapshot {
@@ -85,9 +96,11 @@ class GameStateImpl {
       wins: this.wins,
       map01Stars: this.map01Stars,
       map02Stars: this.map02Stars,
+      map03Stars: this.map03Stars,
       metaGold: this.metaGold,
       startGoldLevel: this.startGoldLevel,
       arrowDmgLevel: this.arrowDmgLevel,
+      cannonDmgLevel: this.cannonDmgLevel,
     };
   }
 
@@ -107,6 +120,7 @@ class GameStateImpl {
   }
 
   bestStars(mapId: string): number {
+    if (mapId === 'map03') return this.map03Stars;
     if (mapId === 'map02') return this.map02Stars;
     return this.map01Stars;
   }
@@ -114,6 +128,11 @@ class GameStateImpl {
   /** Record best stars for a map; returns true if a new best was saved. */
   recordMapStars(mapId: string, stars: number): boolean {
     const clamped = Math.max(0, Math.min(3, Math.floor(stars)));
+    if (mapId === 'map03') {
+      if (clamped <= this.map03Stars) return false;
+      this.map03Stars = clamped;
+      return true;
+    }
     if (mapId === 'map02') {
       if (clamped <= this.map02Stars) return false;
       this.map02Stars = clamped;
@@ -127,6 +146,7 @@ class GameStateImpl {
   isMapUnlocked(mapId: string): boolean {
     if (mapId === 'map01') return true;
     if (mapId === 'map02') return this.map01Stars >= 1;
+    if (mapId === 'map03') return this.map02Stars >= 1;
     return false;
   }
 
@@ -159,6 +179,11 @@ class GameStateImpl {
     return ARROW_DMG_COSTS[this.arrowDmgLevel] ?? null;
   }
 
+  cannonDmgNextCost(): number | null {
+    if (this.cannonDmgLevel >= MAX_UPGRADE) return null;
+    return CANNON_DMG_COSTS[this.cannonDmgLevel] ?? null;
+  }
+
   /** Buy one level of startGold; false if maxed or not enough meta. */
   buyStartGold(): boolean {
     const cost = this.startGoldNextCost();
@@ -177,9 +202,23 @@ class GameStateImpl {
     return true;
   }
 
+  /** Buy one level of cannonDmg; false if maxed or not enough meta. */
+  buyCannonDmg(): boolean {
+    const cost = this.cannonDmgNextCost();
+    if (cost === null || this.metaGold < cost) return false;
+    this.metaGold -= cost;
+    this.cannonDmgLevel += 1;
+    return true;
+  }
+
   /** Effective arrow damage bonus from meta upgrade. */
   arrowDamageBonus(): number {
     return this.arrowDmgLevel * 3;
+  }
+
+  /** Effective cannon damage bonus from meta upgrade. */
+  cannonDamageBonus(): number {
+    return this.cannonDmgLevel * 4;
   }
 }
 

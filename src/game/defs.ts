@@ -246,6 +246,57 @@ const WAVES_MAP02: WaveSpawn[][] = [
   ],
 ];
 
+
+/** West spawn → bridge zigzags → east gate (not map01/02). */
+const PATH_MAP03: Cell[] = [
+  { c: 0, r: 4 },
+  { c: 1, r: 4 },
+  { c: 2, r: 4 },
+  { c: 2, r: 5 },
+  { c: 2, r: 6 },
+  { c: 3, r: 6 },
+  { c: 4, r: 6 },
+  { c: 5, r: 6 },
+  { c: 5, r: 5 },
+  { c: 5, r: 4 },
+  { c: 5, r: 3 },
+  { c: 6, r: 3 },
+  { c: 7, r: 3 },
+  { c: 8, r: 3 },
+  { c: 8, r: 4 },
+  { c: 8, r: 5 },
+  { c: 8, r: 6 },
+  { c: 8, r: 7 },
+  { c: 9, r: 7 },
+  { c: 10, r: 7 },
+  { c: 10, r: 6 },
+  { c: 10, r: 5 },
+  { c: 10, r: 4 },
+  { c: 10, r: 3 },
+  { c: 11, r: 3 },
+];
+
+/** Harder: dense swarm packs, tanks, brute finale. Still 3 waves. */
+const WAVES_MAP03: WaveSpawn[][] = [
+  [
+    { kind: 'runner', count: 10, interval: 600, delay: 200 },
+    { kind: 'swarm', count: 12, interval: 250, delay: 400 },
+    { kind: 'tank', count: 3, interval: 1300, delay: 2000 },
+  ],
+  [
+    { kind: 'runner', count: 10, interval: 520, delay: 200 },
+    { kind: 'swarm', count: 14, interval: 210, delay: 300 },
+    { kind: 'tank', count: 6, interval: 1000, delay: 1100 },
+    { kind: 'brute', count: 2, interval: 1800, delay: 4500 },
+  ],
+  [
+    { kind: 'swarm', count: 18, interval: 180, delay: 100 },
+    { kind: 'runner', count: 12, interval: 450, delay: 200 },
+    { kind: 'tank', count: 8, interval: 850, delay: 900 },
+    { kind: 'brute', count: 4, interval: 1500, delay: 3000 },
+  ],
+];
+
 export const MAPS: Record<string, MapDef> = {
   map01: {
     id: 'map01',
@@ -259,9 +310,15 @@ export const MAPS: Record<string, MapDef> = {
     gate: PATH_MAP02[PATH_MAP02.length - 1] ?? { c: 3, r: 9 },
     waves: WAVES_MAP02,
   },
+  map03: {
+    id: 'map03',
+    path: PATH_MAP03,
+    gate: PATH_MAP03[PATH_MAP03.length - 1] ?? { c: 11, r: 3 },
+    waves: WAVES_MAP03,
+  },
 };
 
-export const MAP_LIST: MapDef[] = [MAPS.map01, MAPS.map02];
+export const MAP_LIST: MapDef[] = [MAPS.map01, MAPS.map02, MAPS.map03];
 
 export function getMap(id: string): MapDef {
   return MAPS[id] ?? MAPS.map01;

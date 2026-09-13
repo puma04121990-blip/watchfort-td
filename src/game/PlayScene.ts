@@ -641,6 +641,8 @@ export class PlayScene extends Phaser.Scene {
     const def = cloneTowerDef(this.selected);
     if (this.selected === 'arrow') {
       def.damage += GameState.arrowDamageBonus();
+    } else if (this.selected === 'cannon') {
+      def.damage += GameState.cannonDamageBonus();
     }
     const { x, y } = cellCenter(c, r);
     const sprite = this.add.image(x, y, def.texture).setDisplaySize(52, 52).setDepth(5);

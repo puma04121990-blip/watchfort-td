@@ -50,9 +50,9 @@ export class MenuScene extends Phaser.Scene {
       })
       .setOrigin(0.5);
 
-    const cardW = 200;
-    const cardH = 96;
-    const gap = 24;
+    const cardW = 170;
+    const cardH = 92;
+    const gap = 16;
     const totalW = MAP_LIST.length * cardW + (MAP_LIST.length - 1) * gap;
     const startX = width / 2 - totalW / 2 + cardW / 2;
     const cardY = height * 0.34;
@@ -60,6 +60,7 @@ export class MenuScene extends Phaser.Scene {
     const nameKey: Record<string, string> = {
       map01: 'menu.map1',
       map02: 'menu.map2',
+      map03: 'menu.map3',
     };
 
     for (let i = 0; i < MAP_LIST.length; i++) {
@@ -179,8 +180,8 @@ export class MenuScene extends Phaser.Scene {
   }
 
   private buildShop(width: number, height: number): void {
-    const shopY0 = height * 0.5;
-    const rowH = 42;
+    const shopY0 = height * 0.48;
+    const rowH = 36;
     const rows: Array<{
       labelKey: string;
       level: number;
@@ -198,6 +199,12 @@ export class MenuScene extends Phaser.Scene {
         level: GameState.arrowDmgLevel,
         cost: GameState.arrowDmgNextCost(),
         buy: () => GameState.buyArrowDmg(),
+      },
+      {
+        labelKey: 'menu.upCannonDmg',
+        level: GameState.cannonDmgLevel,
+        cost: GameState.cannonDmgNextCost(),
+        buy: () => GameState.buyCannonDmg(),
       },
     ];
 
