@@ -85,6 +85,14 @@ interface ShotActor {
   spent: boolean;
 }
 
+interface FloatDmgActor {
+  text: Phaser.GameObjects.Text;
+  x: number;
+  startY: number;
+  age: number;
+  life: number;
+}
+
 interface PendingSpawn {
   kind: EnemyKind;
   at: number;
@@ -120,6 +128,11 @@ const TOWER_COLORS: Record<TowerKind, number> = {
 const SOLDIER_MELEE_MS = 400;
 const SOLDIER_BLOCK_R = 30;
 const BUILD_SECONDS = 15;
+const FLOAT_DMG_CAP = 20;
+const FLOAT_DMG_MS = 450;
+const FLOAT_DMG_RISE = 24;
+const BOSS_BAR_W = 320;
+const BOSS_BAR_H = 14;
 
 function enemyMeleeDamage(kind: EnemyKind): number {
   switch (kind) {
@@ -187,6 +200,10 @@ export class PlayScene extends Phaser.Scene {
   private tutorialOpen = false;
   private tutorialStep = 0;
   private tutorialOverlay: Phaser.GameObjects.Container | null = null;
+  private floatDmgs: FloatDmgActor[] = [];
+  private bossBarRoot: Phaser.GameObjects.Container | null = null;
+  private bossBarFill: Phaser.GameObjects.Rectangle | null = null;
+  private bossBarLabel: Phaser.GameObjects.Text | null = null;
 
   constructor() {
     super({ key: 'PlayScene' });
@@ -223,6 +240,11 @@ export class PlayScene extends Phaser.Scene {
     this.tutorialOpen = false;
     this.tutorialStep = 0;
     this.tutorialOverlay = null;
+    for (const f of this.floatDmgs) f.text.destroy();
+    this.floatDmgs = [];
+    this.bossBarRoot = null;
+    this.bossBarFill = null;
+    this.bossBarLabel = null;
 
     this.mapDef = getMap(GameState.selectedMapId);
     this.totalWaves = this.mapDef.waves.length;
@@ -234,6 +256,7 @@ export class PlayScene extends Phaser.Scene {
     this.drawField();
     this.rangeGfx = this.add.graphics().setDepth(3);
     this.buildHud();
+    this.buildBossBar();
     this.buildPauseButton();
     this.buildSpeedButton();
 
@@ -271,6 +294,7 @@ export class PlayScene extends Phaser.Scene {
     this.stepSoldiers(now);
     this.stepTowers(now);
     this.stepShots(dt);
+    this.stepFloatDmgs(dt);
     this.refreshHud();
     this.checkWaveEnd();
   }
@@ -500,6 +524,7 @@ export class PlayScene extends Phaser.Scene {
     if (this.speedLabel) {
       this.speedLabel.setText(this.speedMul >= 2 ? t('play.speed2') : t('play.speed1'));
     }
+    this.refreshBossBar();
   }
 
   private refreshNextWavePreview(): void {
@@ -1095,6 +1120,7 @@ export class PlayScene extends Phaser.Scene {
   private hurt(e: EnemyActor, dmg: number, slowFactor: number, slowMs: number): void {
     if (!e.alive) return;
     e.hp -= dmg;
+    this.spawnFloatDmg(e.x, e.y, dmg, slowMs > 0);
     if (slowMs > 0) {
       e.slowUntil = this.time.now + slowMs;
       e.slowFactor = slowFactor;
@@ -1109,6 +1135,90 @@ export class PlayScene extends Phaser.Scene {
       AudioBus.playSfx('coin');
       this.refreshHud();
     }
+  }
+
+  private spawnFloatDmg(x: number, y: number, dmg: number, frost: boolean): void {
+    const amount = Math.max(0, Math.round(dmg));
+    if (amount <= 0) return;
+    while (this.floatDmgs.length >= FLOAT_DMG_CAP) {
+      const oldest = this.floatDmgs.shift();
+      oldest?.text.destroy();
+    }
+    const color = frost ? '#22D3EE' : '#E8B84A';
+    const text = this.add
+      .text(x, y - 28, String(amount), {
+        fontFamily: 'system-ui, sans-serif',
+        fontSize: '18px',
+        color,
+        fontStyle: 'bold',
+        stroke: '#111827',
+        strokeThickness: 3,
+      })
+      .setOrigin(0.5)
+      .setDepth(14);
+    this.floatDmgs.push({
+      text,
+      x,
+      startY: y - 28,
+      age: 0,
+      life: FLOAT_DMG_MS,
+    });
+  }
+
+  private stepFloatDmgs(delta: number): void {
+    const remain: FloatDmgActor[] = [];
+    for (const f of this.floatDmgs) {
+      f.age += delta;
+      const p = Math.min(1, f.age / f.life);
+      f.text.setPosition(f.x, f.startY - FLOAT_DMG_RISE * p);
+      f.text.setAlpha(1 - p);
+      if (f.age >= f.life) {
+        f.text.destroy();
+      } else {
+        remain.push(f);
+      }
+    }
+    this.floatDmgs = remain;
+  }
+
+  private buildBossBar(): void {
+    const y = 48;
+    const bg = this.add
+      .rectangle(0, 0, BOSS_BAR_W + 8, BOSS_BAR_H + 28, COLOR.panel, 0.92)
+      .setStrokeStyle(2, COLOR.gold);
+    const track = this.add.rectangle(0, 8, BOSS_BAR_W, BOSS_BAR_H, COLOR.shade);
+    this.bossBarFill = this.add
+      .rectangle(-BOSS_BAR_W / 2, 8, BOSS_BAR_W, BOSS_BAR_H, COLOR.enemyRed)
+      .setOrigin(0, 0.5);
+    this.bossBarLabel = this.add
+      .text(0, -10, '', {
+        fontFamily: 'system-ui, sans-serif',
+        fontSize: '13px',
+        color: '#F3F4F6',
+        fontStyle: 'bold',
+      })
+      .setOrigin(0.5);
+    this.bossBarRoot = this.add
+      .container(GAME_W / 2, y, [bg, track, this.bossBarFill, this.bossBarLabel])
+      .setDepth(115)
+      .setVisible(false);
+  }
+
+  private refreshBossBar(): void {
+    if (!this.bossBarRoot || !this.bossBarFill || !this.bossBarLabel) return;
+    let best: EnemyActor | null = null;
+    for (const e of this.enemies) {
+      if (!e.alive || e.kind !== 'brute') continue;
+      if (!best || e.hp > best.hp) best = e;
+    }
+    if (!best) {
+      this.bossBarRoot.setVisible(false);
+      return;
+    }
+    this.bossBarRoot.setVisible(true);
+    const ratio = Math.max(0, Math.min(1, best.hp / best.maxHp));
+    this.bossBarFill.width = Math.max(1, BOSS_BAR_W * ratio);
+    this.bossBarLabel.setText(`${t('play.boss')} · ${t('enemy.brute')}`);
   }
 
   private checkWaveEnd(): void {
