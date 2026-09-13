@@ -4,6 +4,8 @@ export interface GameStateSnapshot {
   maxGateHp: number;
   wave: number;
   wins: number;
+  /** Best star rating for map01 (0–3). */
+  map01Stars: number;
 }
 
 const RUN_COINS = 120;
@@ -15,6 +17,7 @@ const DEFAULT: GameStateSnapshot = {
   maxGateHp: RUN_GATE,
   wave: 0,
   wins: 0,
+  map01Stars: 0,
 };
 
 /** Mutable runtime game state (singleton). */
@@ -24,6 +27,7 @@ class GameStateImpl {
   maxGateHp = DEFAULT.maxGateHp;
   wave = DEFAULT.wave;
   wins = DEFAULT.wins;
+  map01Stars = DEFAULT.map01Stars;
 
   resetRun(): void {
     this.coins = RUN_COINS;
@@ -37,6 +41,7 @@ class GameStateImpl {
     this.maxGateHp = snapshot.maxGateHp;
     this.wave = snapshot.wave;
     this.wins = snapshot.wins;
+    this.map01Stars = snapshot.map01Stars;
   }
 
   snapshot(): GameStateSnapshot {
@@ -46,6 +51,7 @@ class GameStateImpl {
       maxGateHp: this.maxGateHp,
       wave: this.wave,
       wins: this.wins,
+      map01Stars: this.map01Stars,
     };
   }
 
@@ -62,6 +68,14 @@ class GameStateImpl {
   hitGate(amount = 1): boolean {
     this.gateHp = Math.max(0, this.gateHp - amount);
     return this.gateHp <= 0;
+  }
+
+  /** Record best stars for map01; returns true if a new best was saved. */
+  recordMap01Stars(stars: number): boolean {
+    const clamped = Math.max(0, Math.min(3, Math.floor(stars)));
+    if (clamped <= this.map01Stars) return false;
+    this.map01Stars = clamped;
+    return true;
   }
 }
 

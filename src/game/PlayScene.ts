@@ -48,8 +48,13 @@ interface EnemyActor {
 interface TowerActor {
   col: number;
   row: number;
+  kind: TowerKind;
   def: TowerDef;
+  baseCost: number;
+  level: number;
+  totalSpent: number;
   sprite: Phaser.GameObjects.Image;
+  starMark: Phaser.GameObjects.Text | null;
   lastShot: number;
 }
 
@@ -72,6 +77,24 @@ interface PendingSpawn {
   at: number;
 }
 
+function cloneTowerDef(kind: TowerKind): TowerDef {
+  const src = TOWERS[kind];
+  return { ...src };
+}
+
+function upgradeCost(baseCost: number): number {
+  return Math.floor(baseCost * 0.75);
+}
+
+function sellRefund(totalSpent: number): number {
+  return Math.floor(totalSpent * 0.5);
+}
+
+function starString(n: number): string {
+  const filled = Math.max(1, Math.min(3, n));
+  return '★'.repeat(filled);
+}
+
 export class PlayScene extends Phaser.Scene {
   private selected: TowerKind = 'arrow';
   private occupied = new Set<string>();
@@ -82,6 +105,7 @@ export class PlayScene extends Phaser.Scene {
   private waypoints: { x: number; y: number }[] = [];
   private waveLive = false;
   private ended = false;
+  private paused = false;
   private nextId = 1;
   private goldText!: Phaser.GameObjects.Text;
   private gateText!: Phaser.GameObjects.Text;
@@ -93,7 +117,11 @@ export class PlayScene extends Phaser.Scene {
   private hoverCol = -1;
   private hoverRow = -1;
   private endOverlay: Phaser.GameObjects.Container | null = null;
+  private pauseOverlay: Phaser.GameObjects.Container | null = null;
+  private towerPanel: Phaser.GameObjects.Container | null = null;
+  private selectedTower: TowerActor | null = null;
   private navigating = false;
+  private lastWinStars = 0;
 
   constructor() {
     super({ key: 'PlayScene' });
@@ -109,12 +137,18 @@ export class PlayScene extends Phaser.Scene {
     this.pending = [];
     this.waveLive = false;
     this.ended = false;
+    this.paused = false;
     this.nextId = 1;
     this.hoverCol = -1;
     this.hoverRow = -1;
     this.selectMarks = [];
     this.endOverlay = null;
+    this.pauseOverlay = null;
+    this.towerPanel = null;
+    this.selectedTower = null;
     this.navigating = false;
+    this.lastWinStars = 0;
+    this.time.paused = false;
 
     AudioBus.playMusic('play');
     this.cameras.main.setBackgroundColor(`#${COLOR.shade.toString(16).padStart(6, '0')}`);
@@ -123,9 +157,10 @@ export class PlayScene extends Phaser.Scene {
     this.drawField();
     this.rangeGfx = this.add.graphics().setDepth(3);
     this.buildHud();
+    this.buildPauseButton();
 
     this.input.on('pointermove', (p: Phaser.Input.Pointer) => {
-      if (this.ended || p.y >= ROWS * TILE) {
+      if (this.ended || this.paused || p.y >= ROWS * TILE) {
         this.hoverCol = -1;
         this.hoverRow = -1;
         this.redrawRange();
@@ -137,16 +172,16 @@ export class PlayScene extends Phaser.Scene {
     });
 
     this.input.on('pointerdown', (p: Phaser.Input.Pointer) => {
-      if (this.ended) return;
+      if (this.ended || this.paused) return;
       if (p.y >= ROWS * TILE) return;
       const c = Math.floor(p.x / TILE);
       const r = Math.floor(p.y / TILE);
-      this.tryPlace(c, r);
+      this.onFieldTap(c, r);
     });
   }
 
   update(_time: number, delta: number): void {
-    if (this.ended) return;
+    if (this.ended || this.paused) return;
     const now = this.time.now;
     this.spawnDue(now);
     this.stepEnemies(delta, now);
@@ -195,7 +230,7 @@ export class PlayScene extends Phaser.Scene {
       .setDepth(110);
 
     this.waveText = this.add
-      .text(GAME_W - 16, 10, '', {
+      .text(GAME_W - 56, 10, '', {
         fontFamily: 'system-ui, sans-serif',
         fontSize: '16px',
         color: '#F3F4F6',
@@ -253,7 +288,9 @@ export class PlayScene extends Phaser.Scene {
         .setOrigin(0.5)
         .setDepth(103);
       mark.on('pointerdown', () => {
+        if (this.paused) return;
         this.selected = kind;
+        this.clearTowerSelection();
         AudioBus.playUi('click');
         this.refreshSelect();
       });
@@ -273,11 +310,34 @@ export class PlayScene extends Phaser.Scene {
       .setOrigin(0.5)
       .setDepth(103);
     this.startBg.on('pointerdown', () => {
+      if (this.paused) return;
       this.tryStartWave();
     });
 
     this.refreshHud();
     this.refreshSelect();
+  }
+
+  private buildPauseButton(): void {
+    const x = GAME_W - 28;
+    const y = 28;
+    const bg = this.add
+      .rectangle(0, 0, 40, 36, COLOR.panel, 0.92)
+      .setStrokeStyle(2, COLOR.gold)
+      .setInteractive({ useHandCursor: true });
+    const label = this.add
+      .text(0, 0, 'II', {
+        fontFamily: 'system-ui, sans-serif',
+        fontSize: '16px',
+        color: '#F3F4F6',
+        fontStyle: 'bold',
+      })
+      .setOrigin(0.5);
+    this.add.container(x, y, [bg, label]).setDepth(120);
+    bg.on('pointerdown', (pointer: Phaser.Input.Pointer) => {
+      pointer.event?.stopPropagation?.();
+      this.togglePause();
+    });
   }
 
   private refreshSelect(): void {
@@ -301,7 +361,7 @@ export class PlayScene extends Phaser.Scene {
     const shown = Math.min(Math.max(GameState.wave, 0), TOTAL_WAVES);
     const phase = this.waveLive ? `${shown}/${TOTAL_WAVES}` : `${shown}/${TOTAL_WAVES} · ${t('play.waiting')}`;
     this.waveText.setText(`${t('play.wave')}: ${phase}`);
-    const canStart = !this.ended && !this.waveLive && GameState.wave < TOTAL_WAVES;
+    const canStart = !this.ended && !this.waveLive && !this.paused && GameState.wave < TOTAL_WAVES;
     this.startBg.setFillStyle(canStart ? COLOR.towerBlue : COLOR.shade);
     this.startBg.setAlpha(canStart ? 1 : 0.55);
     this.startLabel.setText(canStart ? t('play.startWave') : t('play.waiting'));
@@ -309,7 +369,20 @@ export class PlayScene extends Phaser.Scene {
 
   private redrawRange(): void {
     this.rangeGfx.clear();
-    if (this.ended) return;
+    if (this.ended || this.paused) return;
+
+    if (this.selectedTower) {
+      const tw = this.selectedTower;
+      const { x, y } = cellCenter(tw.col, tw.row);
+      this.rangeGfx.fillStyle(COLOR.gold, 0.14);
+      this.rangeGfx.fillCircle(x, y, tw.def.range);
+      this.rangeGfx.lineStyle(2, COLOR.gold, 0.9);
+      this.rangeGfx.strokeCircle(x, y, tw.def.range);
+      this.rangeGfx.lineStyle(2, COLOR.gold, 0.85);
+      this.rangeGfx.strokeRect(tw.col * TILE + 2, tw.row * TILE + 2, TILE - 4, TILE - 4);
+      return;
+    }
+
     const c = this.hoverCol;
     const r = this.hoverRow;
     if (!isInGrid(c, r)) return;
@@ -325,15 +398,107 @@ export class PlayScene extends Phaser.Scene {
     this.rangeGfx.strokeRect(c * TILE + 2, r * TILE + 2, TILE - 4, TILE - 4);
   }
 
-  private tryPlace(c: number, r: number): void {
-    if (this.ended) return;
-    const key = `${c},${r}`;
-    if (!isPlaceableGrass(c, r) || this.occupied.has(key)) {
+  private towerAt(c: number, r: number): TowerActor | null {
+    return this.towers.find((tw) => tw.col === c && tw.row === r) ?? null;
+  }
+
+  private onFieldTap(c: number, r: number): void {
+    if (this.ended || this.paused) return;
+    const existing = this.towerAt(c, r);
+    if (existing) {
+      this.selectTower(existing);
+      AudioBus.playUi('click');
+      return;
+    }
+    this.clearTowerSelection();
+    this.tryPlace(c, r);
+  }
+
+  private selectTower(tw: TowerActor): void {
+    this.selectedTower = tw;
+    this.showTowerPanel(tw);
+    this.redrawRange();
+  }
+
+  private clearTowerSelection(): void {
+    this.selectedTower = null;
+    this.hideTowerPanel();
+    this.redrawRange();
+  }
+
+  private hideTowerPanel(): void {
+    if (this.towerPanel) {
+      this.towerPanel.destroy(true);
+      this.towerPanel = null;
+    }
+  }
+
+  private showTowerPanel(tw: TowerActor): void {
+    this.hideTowerPanel();
+    const panelY = ROWS * TILE - 28;
+    const root = this.add.container(GAME_W / 2, panelY).setDepth(150);
+    this.towerPanel = root;
+
+    const bg = this.add
+      .rectangle(0, 0, 320, 52, COLOR.panel, 0.94)
+      .setStrokeStyle(2, COLOR.gold);
+    root.add(bg);
+
+    const upCost = upgradeCost(tw.baseCost);
+    const refund = sellRefund(tw.totalSpent);
+    const atMax = tw.level >= 2;
+
+    const upLabel = atMax
+      ? t('play.maxLevel')
+      : `${t('play.upgrade')} (${upCost})`;
+    const upBg = this.add
+      .rectangle(-78, 0, 140, 36, atMax ? COLOR.shade : COLOR.towerBlue)
+      .setStrokeStyle(2, atMax ? 0x374151 : COLOR.gold)
+      .setInteractive({ useHandCursor: !atMax });
+    const upText = this.add
+      .text(-78, 0, upLabel, {
+        fontFamily: 'system-ui, sans-serif',
+        fontSize: '14px',
+        color: '#F3F4F6',
+      })
+      .setOrigin(0.5);
+    if (!atMax) {
+      upBg.on('pointerdown', (pointer: Phaser.Input.Pointer) => {
+        pointer.event?.stopPropagation?.();
+        this.tryUpgradeSelected();
+      });
+    }
+    root.add(upBg);
+    root.add(upText);
+
+    const sellBg = this.add
+      .rectangle(78, 0, 140, 36, COLOR.shade)
+      .setStrokeStyle(2, COLOR.enemyRed)
+      .setInteractive({ useHandCursor: true });
+    const sellText = this.add
+      .text(78, 0, `${t('play.sell')} (+${refund})`, {
+        fontFamily: 'system-ui, sans-serif',
+        fontSize: '14px',
+        color: '#F3F4F6',
+      })
+      .setOrigin(0.5);
+    sellBg.on('pointerdown', (pointer: Phaser.Input.Pointer) => {
+      pointer.event?.stopPropagation?.();
+      this.trySellSelected();
+    });
+    root.add(sellBg);
+    root.add(sellText);
+  }
+
+  private tryUpgradeSelected(): void {
+    if (this.ended || this.paused) return;
+    const tw = this.selectedTower;
+    if (!tw || tw.level >= 2) {
       AudioBus.playUi('error');
       return;
     }
-    const def = TOWERS[this.selected];
-    if (!GameState.spend(def.cost)) {
+    const cost = upgradeCost(tw.baseCost);
+    if (!GameState.spend(cost)) {
       AudioBus.playUi('error');
       this.goldText.setColor('#D64545');
       this.time.delayedCall(220, () => {
@@ -341,19 +506,87 @@ export class PlayScene extends Phaser.Scene {
       });
       return;
     }
+    tw.level = 2;
+    tw.totalSpent += cost;
+    tw.def.damage = Math.floor(tw.def.damage * 1.4);
+    tw.def.range = Math.floor(tw.def.range * 1.15);
+    tw.sprite.setTint(0xffe08a);
+    if (!tw.starMark) {
+      const { x, y } = cellCenter(tw.col, tw.row);
+      tw.starMark = this.add
+        .text(x + 16, y - 18, '★', {
+          fontFamily: 'system-ui, sans-serif',
+          fontSize: '14px',
+          color: '#E8B84A',
+          fontStyle: 'bold',
+        })
+        .setOrigin(0.5)
+        .setDepth(6);
+    }
+    AudioBus.playUi('confirm');
+    this.refreshHud();
+    this.showTowerPanel(tw);
+    this.redrawRange();
+  }
+
+  private trySellSelected(): void {
+    if (this.ended || this.paused) return;
+    const tw = this.selectedTower;
+    if (!tw) return;
+    const refund = sellRefund(tw.totalSpent);
+    GameState.addCoins(refund);
+    const key = `${tw.col},${tw.row}`;
+    this.occupied.delete(key);
+    tw.sprite.destroy();
+    tw.starMark?.destroy();
+    this.towers = this.towers.filter((t) => t !== tw);
+    this.clearTowerSelection();
+    AudioBus.playUi('click');
+    this.refreshHud();
+  }
+
+  private tryPlace(c: number, r: number): void {
+    if (this.ended || this.paused) return;
+    const key = `${c},${r}`;
+    if (!isPlaceableGrass(c, r) || this.occupied.has(key)) {
+      AudioBus.playUi('error');
+      return;
+    }
+    const base = TOWERS[this.selected];
+    if (!GameState.spend(base.cost)) {
+      AudioBus.playUi('error');
+      this.goldText.setColor('#D64545');
+      this.time.delayedCall(220, () => {
+        this.goldText.setColor('#E8B84A');
+      });
+      return;
+    }
+    const def = cloneTowerDef(this.selected);
     const { x, y } = cellCenter(c, r);
     const sprite = this.add.image(x, y, def.texture).setDisplaySize(52, 52).setDepth(5);
-    this.towers.push({ col: c, row: r, def, sprite, lastShot: 0 });
+    this.towers.push({
+      col: c,
+      row: r,
+      kind: this.selected,
+      def,
+      baseCost: base.cost,
+      level: 1,
+      totalSpent: base.cost,
+      sprite,
+      starMark: null,
+      lastShot: 0,
+    });
     this.occupied.add(key);
     AudioBus.playSfx('place');
     this.refreshHud();
   }
 
   private tryStartWave(): void {
-    if (this.ended || this.waveLive || GameState.wave >= TOTAL_WAVES) {
+    if (this.ended || this.paused || this.waveLive || GameState.wave >= TOTAL_WAVES) {
       AudioBus.playUi('error');
       return;
     }
+    this.clearTowerSelection();
     GameState.wave += 1;
     this.waveLive = true;
     this.queueWave(GameState.wave);
@@ -577,7 +810,7 @@ export class PlayScene extends Phaser.Scene {
   }
 
   private checkWaveEnd(): void {
-    if (!this.waveLive || this.ended) return;
+    if (!this.waveLive || this.ended || this.paused) return;
     if (this.pending.length > 0) return;
     if (this.enemies.some((e) => e.alive)) return;
     this.waveLive = false;
@@ -587,10 +820,118 @@ export class PlayScene extends Phaser.Scene {
     }
   }
 
+  private togglePause(): void {
+    if (this.ended || this.navigating) return;
+    if (this.paused) {
+      this.resumePlay();
+    } else {
+      this.pausePlay();
+    }
+  }
+
+  private pausePlay(): void {
+    if (this.paused || this.ended) return;
+    this.paused = true;
+    this.time.paused = true;
+    this.clearTowerSelection();
+    this.hoverCol = -1;
+    this.hoverRow = -1;
+    this.rangeGfx.clear();
+    AudioBus.playUi('click');
+    this.showPauseOverlay();
+    this.refreshHud();
+  }
+
+  private resumePlay(): void {
+    if (!this.paused) return;
+    this.paused = false;
+    this.time.paused = false;
+    this.hidePauseOverlay();
+    AudioBus.playUi('click');
+    this.refreshHud();
+    this.redrawRange();
+  }
+
+  private hidePauseOverlay(): void {
+    if (this.pauseOverlay) {
+      this.pauseOverlay.destroy(true);
+      this.pauseOverlay = null;
+    }
+  }
+
+  private showPauseOverlay(): void {
+    this.hidePauseOverlay();
+    const root = this.add.container(0, 0).setDepth(210);
+    this.pauseOverlay = root;
+
+    const dim = this.add.rectangle(GAME_W / 2, GAME_H / 2, GAME_W, GAME_H, COLOR.panel, 0.78);
+    dim.setInteractive();
+    root.add(dim);
+
+    root.add(
+      this.add
+        .text(GAME_W / 2, GAME_H / 2 - 70, t('play.pause'), {
+          fontFamily: 'system-ui, sans-serif',
+          fontSize: '32px',
+          color: '#E8B84A',
+          fontStyle: 'bold',
+        })
+        .setOrigin(0.5),
+    );
+
+    const btnW = 200;
+    const btnH = 48;
+    const resumeBg = this.add
+      .rectangle(GAME_W / 2, GAME_H / 2 + 10, btnW, btnH, COLOR.towerBlue)
+      .setStrokeStyle(2, COLOR.gold)
+      .setInteractive({ useHandCursor: true });
+    const resumeLabel = this.add
+      .text(GAME_W / 2, GAME_H / 2 + 10, t('play.resume'), {
+        fontFamily: 'system-ui, sans-serif',
+        fontSize: '18px',
+        color: '#F3F4F6',
+      })
+      .setOrigin(0.5);
+    resumeBg.on('pointerdown', () => {
+      this.resumePlay();
+    });
+    root.add(resumeBg);
+    root.add(resumeLabel);
+
+    const menuBg = this.add
+      .rectangle(GAME_W / 2, GAME_H / 2 + 74, btnW, btnH, COLOR.shade)
+      .setStrokeStyle(2, 0x374151)
+      .setInteractive({ useHandCursor: true });
+    const menuLabel = this.add
+      .text(GAME_W / 2, GAME_H / 2 + 74, t('play.menu'), {
+        fontFamily: 'system-ui, sans-serif',
+        fontSize: '18px',
+        color: '#F3F4F6',
+      })
+      .setOrigin(0.5);
+    menuBg.on('pointerdown', () => {
+      void this.onPauseMenu();
+    });
+    root.add(menuBg);
+    root.add(menuLabel);
+  }
+
+  /** Mid-run leave via pause: skip interstitial. */
+  private async onPauseMenu(): Promise<void> {
+    if (this.navigating) return;
+    this.navigating = true;
+    AudioBus.playUi('click');
+    this.paused = false;
+    this.time.paused = false;
+    this.scene.start('MenuScene');
+  }
+
   private win(): void {
     if (this.ended) return;
     this.ended = true;
-    hookLevelComplete();
+    this.clearTowerSelection();
+    this.lastWinStars = starsForGate(GameState.gateHp, GameState.maxGateHp);
+    hookLevelComplete(this.lastWinStars);
     this.showBanner(t('play.win'), true);
   }
 
@@ -599,6 +940,7 @@ export class PlayScene extends Phaser.Scene {
     this.ended = true;
     this.waveLive = false;
     this.pending = [];
+    this.clearTowerSelection();
     hookLevelFail();
     this.showBanner(t('play.fail'), false);
   }
@@ -608,15 +950,16 @@ export class PlayScene extends Phaser.Scene {
       this.endOverlay.destroy(true);
       this.endOverlay = null;
     }
+    this.hidePauseOverlay();
 
     const root = this.add.container(0, 0).setDepth(200);
     this.endOverlay = root;
 
     const dim = this.add.rectangle(GAME_W / 2, GAME_H / 2, GAME_W, GAME_H, COLOR.panel, 0.78);
-    dim.setInteractive(); // block clicks through to the field
+    dim.setInteractive();
     root.add(dim);
 
-    const titleY = victory ? GAME_H / 2 - 70 : GAME_H / 2 - 110;
+    const titleY = victory ? GAME_H / 2 - 90 : GAME_H / 2 - 110;
     root.add(
       this.add
         .text(GAME_W / 2, titleY, title, {
@@ -628,10 +971,22 @@ export class PlayScene extends Phaser.Scene {
         .setOrigin(0.5),
     );
 
+    if (victory) {
+      root.add(
+        this.add
+          .text(GAME_W / 2, titleY + 42, starString(this.lastWinStars), {
+            fontFamily: 'system-ui, sans-serif',
+            fontSize: '28px',
+            color: '#E8B84A',
+          })
+          .setOrigin(0.5),
+      );
+    }
+
     const btnW = 200;
     const btnH = 48;
     const gap = 16;
-    let cy = victory ? GAME_H / 2 + 10 : GAME_H / 2 - 20;
+    let cy = victory ? GAME_H / 2 + 20 : GAME_H / 2 - 20;
 
     if (!victory) {
       const contBg = this.add
@@ -751,4 +1106,11 @@ export class PlayScene extends Phaser.Scene {
     }
     this.enemies = this.enemies.filter((e) => e.alive);
   }
+}
+
+function starsForGate(gateHp: number, maxGateHp: number): number {
+  if (maxGateHp <= 0) return 1;
+  if (gateHp >= maxGateHp) return 3;
+  if (gateHp >= maxGateHp / 2) return 2;
+  return 1;
 }

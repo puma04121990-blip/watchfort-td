@@ -16,6 +16,7 @@ export async function loadGameState(): Promise<GameStateSnapshot | null> {
     maxGateHp: typeof s.maxGateHp === 'number' ? s.maxGateHp : 15,
     wave: typeof s.wave === 'number' ? s.wave : 0,
     wins: typeof s.wins === 'number' ? s.wins : 0,
+    map01Stars: typeof s.map01Stars === 'number' ? s.map01Stars : 0,
   };
 }
 
