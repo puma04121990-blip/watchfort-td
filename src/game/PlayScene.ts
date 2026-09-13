@@ -125,12 +125,6 @@ function starString(n: number): string {
 
 const HUD_KINDS: TowerKind[] = ['arrow', 'cannon', 'frost', 'barracks'];
 
-const TOWER_COLORS: Record<TowerKind, number> = {
-  arrow: COLOR.towerBlue,
-  cannon: COLOR.cannon,
-  frost: COLOR.frost,
-  barracks: COLOR.barracks,
-};
 
 const SOLDIER_MELEE_MS = 400;
 const SOLDIER_BLOCK_R = 30;
