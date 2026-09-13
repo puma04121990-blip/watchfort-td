@@ -137,6 +137,7 @@ const FLOAT_DMG_MS = 450;
 const FLOAT_DMG_RISE = 24;
 const BOSS_BAR_W = 320;
 const BOSS_BAR_H = 14;
+const STREAK_MS = 1800;
 
 function enemyMeleeDamage(kind: EnemyKind): number {
   switch (kind) {
@@ -213,6 +214,9 @@ export class PlayScene extends Phaser.Scene {
   private runKills = 0;
   private goldEarned = 0;
   private runMs = 0;
+  private killStreak = 0;
+  private lastKillAt = 0;
+  private streakLabel!: Phaser.GameObjects.Text;
 
   constructor() {
     super({ key: 'PlayScene' });
@@ -258,6 +262,8 @@ export class PlayScene extends Phaser.Scene {
     this.runKills = 0;
     this.goldEarned = 0;
     this.runMs = 0;
+    this.killStreak = 0;
+    this.lastKillAt = 0;
 
     this.mapDef = getMap(GameState.selectedMapId);
     this.totalWaves = this.mapDef.waves.length;
@@ -310,6 +316,7 @@ export class PlayScene extends Phaser.Scene {
     this.stepTowers(now);
     this.stepShots(dt);
     this.stepFloatDmgs(dt);
+    this.tickKillStreak(now);
     this.refreshHud();
     this.checkWaveEnd();
   }
@@ -340,6 +347,19 @@ export class PlayScene extends Phaser.Scene {
         padding: { x: 8, y: 4 },
       })
       .setDepth(110);
+
+    this.streakLabel = this.add
+      .text(16, 40, '', {
+        fontFamily: 'system-ui, sans-serif',
+        fontSize: '15px',
+        color: '#86EFAC',
+        backgroundColor: '#111827',
+        padding: { x: 8, y: 3 },
+        fontStyle: 'bold',
+      })
+      .setDepth(110)
+      .setAlpha(0)
+      .setVisible(false);
 
     this.gateText = this.add
       .text(GAME_W / 2, 10, '', {
@@ -1233,8 +1253,21 @@ export class PlayScene extends Phaser.Scene {
       e.hpBg.destroy();
       e.hpFg.destroy();
       this.runKills += 1;
-      this.goldEarned += e.gold;
-      GameState.addCoins(e.gold);
+      const now = this.time.now;
+      if (this.lastKillAt > 0 && now - this.lastKillAt <= STREAK_MS) {
+        this.killStreak += 1;
+      } else {
+        this.killStreak = 1;
+      }
+      this.lastKillAt = now;
+      const bonus = Math.min(5, Math.max(0, this.killStreak - 1));
+      const gained = e.gold + bonus;
+      this.goldEarned += gained;
+      GameState.addCoins(gained);
+      if (bonus > 0) {
+        this.spawnFloatBonus(e.x, e.y, bonus);
+      }
+      this.showStreakLabel();
       if (e.kind === 'brute' && !this.ended) {
         this.cameras.main.shake(180, 0.006);
       }
@@ -1286,6 +1319,75 @@ export class PlayScene extends Phaser.Scene {
       }
     }
     this.floatDmgs = remain;
+  }
+
+  private spawnFloatBonus(x: number, y: number, amount: number): void {
+    const n = Math.max(0, Math.round(amount));
+    if (n <= 0) return;
+    while (this.floatDmgs.length >= FLOAT_DMG_CAP) {
+      const oldest = this.floatDmgs.shift();
+      oldest?.text.destroy();
+    }
+    const text = this.add
+      .text(x, y - 40, `+${n}`, {
+        fontFamily: 'system-ui, sans-serif',
+        fontSize: '18px',
+        color: '#86EFAC',
+        fontStyle: 'bold',
+        stroke: '#111827',
+        strokeThickness: 3,
+      })
+      .setOrigin(0.5)
+      .setDepth(14);
+    this.floatDmgs.push({
+      text,
+      x,
+      startY: y - 40,
+      age: 0,
+      life: FLOAT_DMG_MS,
+    });
+  }
+
+  private showStreakLabel(): void {
+    if (!this.streakLabel) return;
+    if (this.killStreak < 2) {
+      this.hideStreakLabel();
+      return;
+    }
+    this.streakLabel.setText(t('play.streak', { n: this.killStreak }));
+    this.streakLabel.setVisible(true);
+    this.streakLabel.setAlpha(1);
+  }
+
+  private hideStreakLabel(): void {
+    if (!this.streakLabel) return;
+    this.streakLabel.setVisible(false);
+    this.streakLabel.setAlpha(0);
+    this.streakLabel.setText('');
+  }
+
+  private tickKillStreak(now: number): void {
+    if (this.killStreak <= 0 || this.lastKillAt <= 0) return;
+    const elapsed = now - this.lastKillAt;
+    if (elapsed >= STREAK_MS) {
+      this.resetKillStreak();
+      return;
+    }
+    if (this.killStreak >= 2 && this.streakLabel?.visible) {
+      // Fade in the last ~400ms of the streak window.
+      const remain = STREAK_MS - elapsed;
+      if (remain < 400) {
+        this.streakLabel.setAlpha(Math.max(0, remain / 400));
+      } else {
+        this.streakLabel.setAlpha(1);
+      }
+    }
+  }
+
+  private resetKillStreak(): void {
+    this.killStreak = 0;
+    this.lastKillAt = 0;
+    this.hideStreakLabel();
   }
 
   private buildBossBar(): void {
@@ -1452,6 +1554,7 @@ export class PlayScene extends Phaser.Scene {
     this.ended = true;
     this.cancelBuildTimer();
     this.clearTowerSelection();
+    this.resetKillStreak();
     this.lastWinStars = starsForGate(GameState.gateHp, GameState.maxGateHp);
     this.lastWinMeta = hookLevelComplete(this.lastWinStars);
     this.metaDoubled = false;
@@ -1465,6 +1568,7 @@ export class PlayScene extends Phaser.Scene {
     this.pending = [];
     this.cancelBuildTimer();
     this.clearTowerSelection();
+    this.resetKillStreak();
     hookLevelFail();
     this.showBanner(t('play.fail'), false);
   }
